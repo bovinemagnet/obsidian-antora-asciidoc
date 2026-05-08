@@ -1,0 +1,44 @@
+= Settings
+
+Open *Settings → Community plugins → Antora AsciiDoc* to access the plugin settings.
+
+== Editor
+
+`Enable diagnostics`::
+Master toggle for the inline broken-xref decoration in the editor. When off, diagnostics still run on demand but no inline highlighting is shown.
+
+`Enable autocomplete`::
+Master toggle for the six AsciiDoc autocomplete sources (xref pages, anchors, attributes, images, includes, block macros, block attributes).
+
+`Auto-validate on save`::
+When on, modifying an `.adoc` file triggers a debounced re-validation. Diagnostics view updates in place, replacing only the entries for the changed file.
+
+== Antora workspace
+
+`Include file extensions`::
+Comma-separated list of extensions treated as AsciiDoc. Defaults to `.adoc,.asciidoc`. Used by `Validate Antora workspace`.
+
+`Ignore paths`::
+Comma-separated vault paths excluded from indexing. Trailing slashes are normalised; both individual files and entire subtrees are supported.
+
+`External content roots` [.label]#desktop#::
+Comma-separated absolute filesystem paths scanned in addition to the vault. Use this for Antora content sources that live outside the vault — typically a sibling git checkout. Discovered automatically from `content.sources` in any detected `playbook.yml`/`site.yml`; manual entries here are merged with auto-discovered ones.
+
+== Build
+
+`Antora executable path` [.label]#desktop#::
+Command used by `Run Antora build`. Defaults to `antora`. Set to a full path if the binary isn't on PATH.
+
+`Antora playbook path` [.label]#desktop#::
+Path to the playbook file. Defaults to `site.yml`. The build runs from the playbook's directory.
+
+`Build command override` [.label]#desktop#::
+Optional override that replaces the entire build command. Useful for `npm run docs`-style wrappers or Docker invocations.
+
+== Linting
+
+`Vale executable` [.label]#desktop#::
+Command used by the Vale lint commands. Defaults to `vale`. Leave blank to disable the integration.
+
+`Vale working directory` [.label]#desktop#::
+Directory containing `.vale.ini`. Defaults to the playbook's directory when blank.

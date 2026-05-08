@@ -9,7 +9,10 @@
   "scripts": {
     "dev": "node esbuild.config.mjs",
     "build": "node esbuild.config.mjs --production",
-    "lint": "eslint . --ext .ts"
+    "lint": "eslint . --ext .ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "version": "node version-bump.mjs && git add manifest.json versions.json"
   },
   "keywords": [
     "obsidian",
@@ -24,12 +27,19 @@
     "@codemirror/language": "6.11.3",
     "@codemirror/state": "6.5.0",
     "@codemirror/view": "6.38.6",
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^20.17.57",
     "@typescript-eslint/eslint-plugin": "^7.18.0",
     "@typescript-eslint/parser": "^7.18.0",
-    "@types/node": "^20.17.57",
+    "@vitest/coverage-v8": "^4.1.5",
     "esbuild": "^0.25.11",
     "eslint": "^8.57.1",
     "obsidian": "^1.8.10",
-    "typescript": "5.5.4"
+    "typescript": "5.5.4",
+    "vitest": "^4.1.5"
+  },
+  "dependencies": {
+    "asciidoctor": "^3.0.4",
+    "js-yaml": "^4.1.1"
   }
 }

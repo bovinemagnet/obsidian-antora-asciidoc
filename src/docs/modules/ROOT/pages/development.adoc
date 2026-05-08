@@ -1,0 +1,111 @@
+= Development
+
+== Local setup
+
+[source,bash]
+----
+git clone https://github.com/bovinemagnet/obsidian-antora-asciidoc.git
+cd obsidian-antora-asciidoc
+npm install
+----
+
+Node.js 20+ and npm 10+ required.
+
+== Common commands
+
+[cols="1,2"]
+|===
+| Command | What it does
+
+| `npm run build`
+| Production build via esbuild → `main.js` (minified, no sourcemaps)
+
+| `npm run dev`
+| Watch build with inline sourcemaps
+
+| `npm run lint`
+| ESLint over `src/` and the test suite
+
+| `npm test`
+| Run the vitest suite once
+
+| `npm run test:watch`
+| Vitest watch mode
+
+| `npx tsc --noEmit`
+| Type check without emitting JS
+|===
+
+There is no separate `lint:fix` script — eslint --fix can be run via `npx eslint . --ext .ts --fix` if needed.
+
+== Testing in a vault
+
+. `npm run build`
+. Copy `main.js`, `manifest.json`, and `styles.css` into `<vault>/.obsidian/plugins/{plugin-id}/`
+. Reload Obsidian (`Ctrl/Cmd-R`) or disable/re-enable the plugin
+
+For an iterative loop, symlink the build output:
+
+[source,bash]
+----
+ln -s "$(pwd)/main.js" "<vault>/.obsidian/plugins/{plugin-id}/main.js"
+ln -s "$(pwd)/manifest.json" "<vault>/.obsidian/plugins/{plugin-id}/manifest.json"
+ln -s "$(pwd)/styles.css" "<vault>/.obsidian/plugins/{plugin-id}/styles.css"
+npm run dev
+----
+
+Then `Ctrl/Cmd-R` reloads after each rebuild.
+
+== Project layout
+
+[source]
+----
+src/
+  main.ts                 ← Plugin entry, command + view wiring
+  antora/                 ← Index, scanner, resolvers, parsers
+  asciidoc/               ← Parser, preview renderer, conditional blocks
+  build/                  ← AntoraBuildRunner, ValeRunner, output parsers
+  diagnostics/            ← Validators + DiagnosticsService
+  editor/                 ← CodeMirror extensions (autocomplete, hover, …)
+  io/                     ← FileSource interface + implementations
+  refactor/               ← RefactorService + RenameModal
+  settings/               ← Plugin settings + tab UI
+  util/                   ← Logger, Debounce, FileUtils
+  views/                  ← Item views (Explorer, Diagnostics, Preview, Console)
+tests/
+  stubs/obsidian.ts       ← Stubbed Obsidian types
+  unit/*.test.ts          ← Vitest suites
+src/docs/                 ← This Antora documentation site
+----
+
+== Adding a new feature
+
+The recommended pattern:
+
+. Add the pure logic in `src/<layer>/` with full tests using `InMemoryFileSource` where applicable
+. Wire into `src/main.ts` — register a command, view, or editor extension
+. Add a settings field if behaviour is configurable (`PluginSettings.ts` + `SettingsTab.ts`)
+. Update the relevant page in `src/docs/`
+. `npm run lint && npm test && npm run build`
+
+Avoid:
+
+* Reaching into Obsidian APIs from anywhere except `src/main.ts` and `src/views/` — keeps the rest of the codebase testable
+* Using regex YAML parsing — js-yaml is already a dependency
+* Adding new dependencies without weighing the bundle impact (current bundle is ~850 KB; asciidoctor.js dominates)
+
+== Releasing
+
+The `npm version <new>` lifecycle hook runs `version-bump.mjs`, which propagates the new version into `manifest.json` and `versions.json`. Then:
+
+. `npm version 0.2.0`
+. `git push --follow-tags`
+. (Future) GitHub Actions builds + publishes the release artefact
+
+== Conventions
+
+* TypeScript `strict` mode
+* British spelling in user-visible strings and docs
+* No `// removed for X` comments — delete the code
+* No emoji in code or docs unless explicitly requested
+* `co-authored-by` / `Co-Authored-By` lines in commit messages: NOT used

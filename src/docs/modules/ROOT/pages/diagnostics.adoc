@@ -1,0 +1,74 @@
+= Diagnostics & linting
+
+Diagnostics surface broken xrefs, unresolved includes, missing anchors, and unresolved attributes. External linter output (Vale) flows through the same pipeline.
+
+== Validators
+
+The plugin ships three in-house validators:
+
+`XrefValidator`::
+Walks every parsed xref symbol, resolves it via `AntoraPathResolver` (with the source page's component/module as defaults), and consults the index. Emits `error` for unresolved targets and missing anchors. Anchor lookup falls back to the workspace-wide auxiliary set so anchors declared in included partials don't trigger false positives.
+
+`IncludeValidator`::
+Walks every parsed `include::` directive, resolves it via `AntoraResourceResolver` (handles `partial$`, `example$`, `attachment$`, `image$`, `page$` resource IDs as well as relative and absolute paths), and confirms the target exists in the FileSource. Emits `error` for unresolved targets.
+
+Attribute checks (in `DiagnosticsService`)::
+Flags any `{attr}` reference whose name isn't in the union of:
++
+* AsciiDoc + Antora built-ins (`docname`, `imagesdir`, `page-component-name`, etc.)
+* Names registered from `asciidoc.attributes` in any `antora.yml`
+* Names declared as page-level `:name: value` lines anywhere in the workspace
++
+References inside disabled `ifdef::`/`ifndef::`/`ifeval::` blocks are suppressed.
+
+== Conditional block awareness
+
+`findDisabledRanges` parses the document for ifdef/ifndef/endif markers and returns the line ranges that won't render given the current attribute scope. The diagnostics service uses this to skip attribute warnings inside disabled blocks. Recognised forms:
+
+[source,asciidoc]
+----
+ifdef::feature[]      <1>
+ifndef::feature[]     <2>
+ifdef::a,b[]          <3>
+ifdef::a+b[]          <4>
+ifeval::["{x}" == "y"]<5>
+endif::[]
+----
+<1> Included when `feature` is defined
+<2> Included when `feature` is NOT defined
+<3> OR — included when any of `a, b` is defined
+<4> AND — included when all of `a, b` are defined
+<5> Always treated as disabled (we don't evaluate expressions)
+
+Nested conditionals are tracked via a stack.
+
+== Workspace validation chunking
+
+`validateWorkspace` batches files (default 50 per batch) and yields to the event loop between batches with `setTimeout(0)`. This keeps the renderer thread responsive on large workspaces — the PRD target of 5,000 pages in 5 seconds is achievable without freezing.
+
+An optional `onProgress(done, total)` callback fires per batch for future progress UI.
+
+== Auto-validate on save
+
+When `Auto-validate on save` is enabled (default), modifying any `.adoc` file triggers a debounced re-validation (default 750 ms). Results update the diagnostics view in place — only entries for the modified file are replaced, so workspace-validation results are preserved.
+
+== Vale integration [.label]#desktop#
+
+`ValeRunner` spawns `vale --output=JSON` and parses the structured response. Severity mapping:
+
+[cols="1,1"]
+|===
+| Vale | Diagnostic
+
+| `error` | `error`
+| `warning` | `warning`
+| `suggestion` | `info`
+|===
+
+The check name appears in the message: `[Style.Voice] Use the active voice.`
+
+== Diagnostics view
+
+The view shows one entry per diagnostic with severity, file path, line:column, and message. Clicking an entry opens the file and positions the cursor at the diagnostic location.
+
+`replaceDiagnosticsForFile(filePath, fileDiagnostics)` lets callers update results for one file without losing entries from other files — used by both the auto-validate flow and the `Find references to current page` command.

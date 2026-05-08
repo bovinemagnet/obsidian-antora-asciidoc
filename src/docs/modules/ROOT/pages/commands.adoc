@@ -1,0 +1,46 @@
+= Commands
+
+All commands are available from the Obsidian command palette (Ctrl/Cmd-P). Desktop-only commands are marked with [.label]#desktop#.
+
+== Indexing
+
+`Reindex Antora workspace`::
+Forces a full rescan of `antora.yml`, page, partial, example, image, and `nav.adoc` files. The plugin reindexes incrementally on vault events automatically; this command exists for cases where you want a guaranteed-fresh state.
+
+== Diagnostics
+
+`Validate current AsciiDoc file`::
+Runs xref, include, and attribute checks on the active `.adoc` file. Results open in the *Antora Diagnostics* view, with click-to-jump navigation.
+
+`Validate Antora workspace`::
+Walks every file matching the `Include file extensions` setting and aggregates diagnostics. Chunked into batches with cooperative yielding so the UI stays responsive on large workspaces.
+
+`Lint current file with Vale` [.label]#desktop#::
+Runs `vale --output=JSON` against the active file. Vale alerts surface as Diagnostic entries (suggestion → info, warning → warning, error → error). Requires `Vale executable` to be configured.
+
+`Lint Antora workspace with Vale` [.label]#desktop#::
+Same as above but targets the entire workspace.
+
+== Build
+
+`Run Antora build` [.label]#desktop#::
+Spawns the configured Antora executable against the playbook and streams stdout/stderr into the *Antora Build Console* view. Parsed errors and warnings populate the diagnostics view at completion.
+
+== Views
+
+`Open Antora explorer`::
+Opens the *Antora Explorer* sidebar showing the indexed component → version → module hierarchy. When `nav.adoc` files are present, modules display the navigation tree with click-to-open links.
+
+`Open AsciiDoc preview`::
+Opens the *AsciiDoc Preview* pane for the active `.adoc` file. The pane updates automatically when the file is modified or you switch files.
+
+== Refactoring
+
+`Rename current AsciiDoc page`::
+Prompts for a new page path (under the same module's `pages/` folder), shows a reference count via *Preview references*, and on Apply rewrites every xref pointing at the page across the workspace, then renames the file. All file changes are snapshotted first; if any step throws, the workspace is rolled back.
+
+`Rename anchor under cursor`::
+Detects an anchor declaration (`[[id]]`, `[#id]`, or `[id="id"]`) on the cursor's line and prompts for a new name. On Apply, rewrites the declaration plus every `xref:...#id[...]` reference that resolves to the owning page.
+
+`Find references to current page`::
+Lists every xref pointing at the active page in the diagnostics view (severity `info`). Useful before deciding whether to rename or move a page.

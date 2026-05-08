@@ -1,0 +1,69 @@
+= Refactoring
+
+The plugin supports two refactor operations: page rename and anchor rename. Both are workspace-aware — every reference is rewritten in lockstep with the declaration change.
+
+== Page rename
+
+Run `Rename current AsciiDoc page` while editing the page you want to rename.
+
+. The modal opens prefilled with the current page-relative path (e.g. `index.adoc`)
+. Click *Preview references* to see how many xrefs across the workspace would be updated
+. Type the new path and click *Apply*
+
+What happens:
+
+* The `RefactorService` walks every `.adoc` file via the AsciiDocParser, resolves each xref, and identifies references whose resolved target matches the page being renamed
+* References are rewritten preserving their original scope (bare → bare, `module:page` → `module:page`, `component:module:page` → `component:module:page`) so writers' deliberate scoping choices are kept
+* Anchors on the references are preserved
+* All file content changes are snapshotted, then applied
+* The file move (`vault.rename`) runs last
+* If any step throws, the workspace is rolled back
+
+Page rename also rewrites xrefs inside `nav.adoc` files. Non-page sources (nav, partials, examples) get xref-resolution defaults from a path-based component lookup so their references resolve and rewrite correctly.
+
+== Anchor rename
+
+Run `Rename anchor under cursor` with the cursor positioned on an anchor declaration.
+
+Recognised declaration forms on the cursor line:
+
+[source,asciidoc]
+----
+[[my-anchor]]            <1>
+[[my-anchor,Some text]]  <2>
+[#my-anchor]             <3>
+[id="my-anchor"]         <4>
+----
+<1> Block anchor
+<2> Block anchor with reftext
+<3> Inline anchor
+<4> Quoted-id form
+
+What happens:
+
+* The declaration is rewritten on the owning page in all three forms
+* All `xref:...#my-anchor[...]` references that resolve to the owning page are rewritten
+* References to the same anchor name on a *different* page are NOT touched — the rename is owner-page-scoped by design
+* Snapshot/rollback works the same as page rename
+
+== Find references
+
+Run `Find references to current page` to list every xref pointing at the active page in the diagnostics view, severity `info`. Useful as a dry-run before deciding whether to rename or move a page.
+
+== Rollback semantics
+
+`applyRefactorPlan` does:
+
+. Read the original content of every file the plan would modify
+. Apply each modify; track which were successfully written
+. Apply the file move last
+. On failure: walk the snapshot in reverse, restoring originals for files that were modified, then undoing the rename if it had completed
+. Each rollback step is itself wrapped in try/catch so a failed restore doesn't lose the original error
+
+This means a partial failure leaves no orphan references pointing at a missing file.
+
+== Limitations
+
+* The page rename's xref rewrite is exact: it preserves the writer's scope choice for each reference. Cross-component renames produce identical output regardless of source-page scope.
+* The current implementation rebuilds plans from scratch each time `Preview references` is clicked — fine for typical workspace sizes (≤ 5 K pages) but could be optimised with caching for very large projects.
+* No undo history beyond the single in-flight operation; once the modal closes successfully, the changes stand.

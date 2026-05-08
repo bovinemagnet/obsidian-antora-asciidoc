@@ -6,6 +6,20 @@ export interface PluginSettings {
   buildCommandOverride: string;
   includeFileExtensions: string[];
   ignorePaths: string[];
+  /**
+   * Absolute filesystem roots scanned in addition to the Obsidian vault.
+   * Used for Antora content sources that live outside the vault (e.g. a
+   * sibling git checkout referenced from playbook.yml). Desktop only.
+   */
+  externalContentRoots: string[];
+  /** Path or name of the Vale executable. Empty disables the integration. */
+  valeExecutablePath: string;
+  /** Optional working directory for Vale. Falls back to the playbook directory. */
+  valeWorkingDirectory: string;
+  /** When true, modify-debounced revalidation runs on the active file. */
+  autoValidateOnSave: boolean;
+  /** Debounce in milliseconds for auto-validation (defaults to 750ms). */
+  autoValidateDebounceMs: number;
 }
 
 export const DEFAULT_SETTINGS: PluginSettings = {
@@ -16,4 +30,9 @@ export const DEFAULT_SETTINGS: PluginSettings = {
   buildCommandOverride: '',
   includeFileExtensions: ['.adoc', '.asciidoc'],
   ignorePaths: [],
+  externalContentRoots: [],
+  valeExecutablePath: 'vale',
+  valeWorkingDirectory: '',
+  autoValidateOnSave: true,
+  autoValidateDebounceMs: 750,
 };

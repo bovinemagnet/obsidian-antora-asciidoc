@@ -1,0 +1,121 @@
+= Architecture
+
+`{plugin-name}` is structured around six layered subsystems with explicit interfaces between them. The shape mirrors the dependency graph: layers below depend only on layers further below.
+
+== Layer overview
+
+[source]
+----
++------------------------------------------------------+
+|  Plugin entry (src/main.ts)                          |
+|  - registers commands, views, editor extensions      |
+|  - owns the singleton services                       |
++------------------------------------------------------+
+|  Editor extensions (src/editor/)                     |
+|  - autocomplete, hover, diagnostics, folding, nav    |
+|  - consult AntoraComponentIndex via EditorContext    |
++------------------------------------------------------+
+|  Views (src/views/)                                  |
+|  - Antora Explorer, Diagnostics, Preview, Console    |
++------------------------------------------------------+
+|  Refactor (src/refactor/)                            |
+|  - find-references + plan-then-apply rename          |
++------------------------------------------------------+
+|  Diagnostics (src/diagnostics/)                      |
+|  - xref + include + attribute validators             |
+|  - workspace chunking                                 |
++------------------------------------------------------+
+|  Build (src/build/)                                  |
+|  - AntoraBuildRunner (streaming)                     |
+|  - ValeRunner                                         |
+|  - Output parsers                                     |
++------------------------------------------------------+
+|  Antora model (src/antora/)                          |
+|  - AntoraComponentIndex (the in-memory model)        |
+|  - AntoraWorkspaceScanner (populates the index)      |
+|  - AntoraPathResolver, AntoraResourceResolver        |
+|  - NavigationParser, PlaybookParser                  |
+|  - ConditionalBlocks (in src/asciidoc/)              |
++------------------------------------------------------+
+|  IO abstraction (src/io/)                            |
+|  - FileSource interface                              |
+|  - VaultFileSource, NodeFileSource, Composite, …     |
++------------------------------------------------------+
+----
+
+== Key interfaces
+
+`FileSource`::
+The single seam for content access. `VaultFileSource` wraps Obsidian's `Vault`; `NodeFileSource` wraps `node:fs` for external content roots; `CompositeFileSource` overlays them. Tests use `InMemoryFileSource`. Every other layer depends on `FileSource`, not on Obsidian's vault directly.
+
+`AntoraComponentIndex`::
+The in-memory model. Maintains:
++
+* Components → versions → modules → pages/partials/examples/images
+* Three-way page keying (`page`, `module:page`, `component:module:page`) for fast xref resolution
+* Reverse lookup `getPageByFilePath(filePath)` for "what page is this file?"
+* Per-descriptor attribute maps (`getDescriptorAttributesFor(filePath)`)
+* Workspace-known attribute names set (for diagnostics)
+* Auxiliary anchor set (anchors from partials/examples)
+* Navigation trees per module
+
+`EditorContext`::
+Shared lookup consulted by every CodeMirror extension. Carries:
++
+* `isAsciiDocActive()` — gate for activation
+* `getDefaults()` — current page's component/module for xref-default fallback
+* `getActiveFilePath()` — for descriptor-attribute lookup
+
+The plugin updates this on `active-leaf-change` and `file-open`.
+
+== Data flow
+
+[source]
+----
+Vault files
+  → AntoraWorkspaceScanner.scan()
+    → loads descriptors via js-yaml
+    → indexes pages, partials, examples, images
+    → registers descriptor + page-level attribute names
+    → registers nav.adoc trees
+    → registers auxiliary anchors
+  → AntoraComponentIndex (populated)
+
+User edits .adoc
+  → vault.on('modify')
+    → debounced full reindex (only if antora.yml changed)
+    → otherwise scanner.indexFile (per-file incremental update)
+    → debounced auto-validate (if enabled)
+
+User triggers a command
+  → plugin reads from index / runs validators
+  → results to view
+----
+
+== Editor-extension wiring
+
+`registerEditorExtension` accepts a mutable array. The plugin holds the array, mutates it on `saveSettings`, and calls `app.workspace.updateOptions()` to push the new extension list. This means toggling settings like `Enable autocomplete` takes effect without a plugin reload.
+
+== Async preview pipeline
+
+`AsciiDocPreviewRenderer.render` is async because it pre-loads include content via the `FileSource` before handing the source to asciidoctor.js. Inside the synchronous render, an `IncludeProcessor` extension serves from the pre-loaded cache.
+
+The asciidoctor processor itself is constructed lazily on first render — the Opal runtime initialisation is the heavy part of importing asciidoctor.js, and many users never open the preview.
+
+== Test approach
+
+* Pure modules (parsers, resolvers, validators, refactor service) are tested directly with `InMemoryFileSource`
+* Obsidian types are stubbed in `tests/stubs/obsidian.ts` — only the surface area we use
+* Editor-extension wiring is not unit-tested (it runs inside CodeMirror); the candidate-collection logic that feeds completions is small enough to reason about manually
+* The vitest suite covers ~120 tests across the whole codebase
+
+== Bundle composition
+
+The production bundle (`main.js`) is around 850 KB. Roughly:
+
+* asciidoctor.js + Opal runtime: ~750 KB (the bulk)
+* js-yaml: ~40 KB
+* Plugin code: ~50 KB
+* Externals (excluded): `obsidian`, `electron`, `@codemirror/*`, `node:*`
+
+Asciidoctor is the dominant cost. We keep it lazy at the *processor* level (only initialised when the preview view is first opened), but the import is bundled so the user pays the download cost regardless.

@@ -1,0 +1,17 @@
+site:
+  title: Obsidian Antora AsciiDoc
+  start_page: obsidian-antora-asciidoc::index.adoc
+
+content:
+  sources:
+    - url: .
+      branches: HEAD
+      start_paths: src/docs
+
+ui:
+  bundle:
+    url: https://gitlab.com/antora/antora-ui-default/-/jobs/artifacts/HEAD/raw/build/ui-bundle.zip?job=bundle-stable
+    snapshot: true
+
+output:
+  dir: ./build/site

@@ -1,0 +1,35 @@
+= Obsidian Antora AsciiDoc
+
+`{plugin-name}` is an Obsidian plugin that turns Obsidian into a first-class authoring environment for Antora-based AsciiDoc documentation projects.
+
+== What it does
+
+* Detects Antora components in your vault and indexes pages, partials, examples, images, anchors, and navigation
+* Adds AsciiDoc-aware editing on top of Obsidian's editor: autocomplete for xrefs, anchors, attributes, images, includes, and block macros; hover previews; ctrl-click navigation; section folding
+* Provides an AsciiDoc-aware preview pane with includes, attributes, tabs, and Mermaid diagrams (via Obsidian's built-in renderer)
+* Surfaces broken xrefs, unresolved attributes, missing anchors, and unresolved includes as click-to-jump diagnostics
+* Wraps Antora builds and Vale linting in streaming desktop-side commands
+* Supports rename/refactor for pages and anchors with workspace-wide reference rewriting and automatic rollback on failure
+
+== Who it's for
+
+* Documentation engineers building enterprise documentation portals with Antora
+* Developer advocates and technical writers maintaining API and platform documentation
+* Software engineers documenting services, SDKs, and internal systems
+* Open-source maintainers who already use the Antora ecosystem and want a lighter editor than IntelliJ
+
+== Status
+
+The plugin covers the MVP scope from the original PRD plus most of the stretch goals. Highlights:
+
+* xref:editor-features.adoc[Editor features]: six autocomplete sources, three hover providers, section folding, broken-xref decoration
+* xref:preview.adoc[Preview]: asciidoctor.js-backed render with Antora attribute scoping, include resolution via Antora resource IDs, in-house tabs, Mermaid via Obsidian
+* xref:diagnostics.adoc[Diagnostics]: chunked workspace validation, conditional-block-aware attribute checks, auto-validate on save
+* xref:refactoring.adoc[Refactoring]: page rename with workspace-wide xref rewrite, anchor rename, find-references, undo-on-failure rollback
+* xref:antora-integration.adoc[Antora integration]: js-yaml-backed component detection, playbook content-source discovery, navigation tree parsing
+
+See xref:installation.adoc[Installation] to get started.
+
+== License
+
+Apache-2.0.

@@ -1,0 +1,85 @@
+= Preview
+
+The *AsciiDoc Preview* pane renders the active `.adoc` file using https://asciidoctor.org/[asciidoctor.js] with Antora-aware extensions.
+
+== Opening the preview
+
+Run `Open AsciiDoc preview` from the command palette. The pane:
+
+* Displays the rendered HTML for the active `.adoc` file
+* Refreshes when the file is modified (via `vault.on('modify')`)
+* Switches content when you change the active file
+
+== Render pipeline
+
+[source]
+----
+source AsciiDoc
+  → preprocessTabsBlocks (in-house [tabs] → HTML passthrough)
+  → preprocessDiagramBlocks ([mermaid]/[plantuml]/etc → [source,X])
+  → preloadIncludes (resolves include:: targets via FileSource)
+  → asciidoctor.js convert (with extension_registry containing the include
+                            processor)
+  → DOM nodes appended to the view
+  → rewriteXrefLinks (clickable in-vault navigation)
+  → rewriteImageSources (vault.adapter.getResourcePath URLs)
+  → activateTabBlocks (click-to-switch behaviour)
+  → highlightCodeBlocks (Obsidian's MarkdownRenderer for syntax highlighting)
+----
+
+== Attribute scoping
+
+Attribute substitution uses a per-page scope:
+
+. Descriptor attributes from the page's owning component (`asciidoc.attributes` in `antora.yml`)
+. Page-level `:name: value` declarations from the page header
+
+Pages outside any indexed descriptor get an empty scope — descriptor values from one component never leak into another. Page-level attributes always override descriptor values.
+
+== Includes
+
+`include::` directives are resolved via `AntoraResourceResolver`, which understands:
+
+* Antora resource IDs: `partial$X`, `example$X`, `attachment$X`, `image$X`, `page$X`
+* Module-qualified IDs: `mymod:partial$X`
+* Component-qualified IDs: `othercomp:mymod:partial$X`
+* Sibling-relative paths: `snippets/intro.adoc`
+* Absolute vault paths: `/shared/common.adoc`
+
+Unresolved includes render as a visible block instead of failing the whole render.
+
+== Tabs
+
+The preview supports the standard `[tabs]` syntax:
+
+[source,asciidoc]
+----
+[tabs]
+======
+Tab A::
++
+Content for tab A.
+
+Tab B::
++
+Content for tab B.
+======
+----
+
+Tabs are interactive — clicking a label switches the visible panel.
+
+== Diagrams
+
+`[mermaid]` blocks are rewritten to `[source,mermaid]` and routed through Obsidian's `MarkdownRenderer`. Obsidian renders Mermaid natively, so diagrams display in the preview pane without bundling additional dependencies.
+
+`[plantuml]`, `[graphviz]`, `[ditaa]`, `[dot]`, `[asciimath]`, and `[latexmath]` blocks are rewritten the same way. They render as code blocks unless a community plugin claims them.
+
+== Cross-references
+
+Rendered xrefs are post-processed: anchor href values matching the Antora xref pattern are replaced with click handlers that open the target file in the most recent leaf. Anchors are preserved through the rewrite.
+
+== Limitations
+
+* The preview pane is a custom `ItemView`, not Obsidian's reading-mode preview. Right-click commands and reading-mode features are not available.
+* Conditional blocks (`ifdef::`, `ifndef::`) are evaluated by asciidoctor against the resolved attribute scope; this matches what the diagnostics layer assumes.
+* Source code highlighting uses Obsidian's renderer, which limits language support to whatever Obsidian's bundled highlighters cover.

@@ -10,8 +10,9 @@ export class XrefValidator {
   ) {}
 
   validate(filePath: string, symbols: AsciiDocSymbols): Diagnostic[] {
+    const defaults = this.deriveDefaultsFor(filePath);
     return symbols.xrefs.flatMap((xref) => {
-      const target = this.pathResolver.resolveXrefTarget(xref.target);
+      const target = this.pathResolver.resolveXrefTarget(xref.target, defaults);
       const page = this.index.resolvePage(target);
 
       if (!page) {
@@ -24,7 +25,7 @@ export class XrefValidator {
         } satisfies Diagnostic];
       }
 
-      if (target.anchor && !page.anchors.has(target.anchor)) {
+      if (target.anchor && !page.anchors.has(target.anchor) && !this.index.hasAuxiliaryAnchor(target.anchor)) {
         return [{
           message: `Missing anchor '${target.anchor}' in ${xref.target}`,
           filePath,
@@ -36,5 +37,13 @@ export class XrefValidator {
 
       return [];
     });
+  }
+
+  private deriveDefaultsFor(filePath: string): { component?: string; module?: string } {
+    const owning = this.index.getPageByFilePath(filePath);
+    if (!owning) {
+      return {};
+    }
+    return { component: owning.component, module: owning.module };
   }
 }

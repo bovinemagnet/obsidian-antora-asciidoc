@@ -1,0 +1,63 @@
+= Editor features
+
+The plugin layers AsciiDoc-aware behaviour on top of Obsidian's CodeMirror editor. All extensions activate only when the active file is `.adoc` or `.asciidoc`, so they never contaminate ordinary Markdown notes.
+
+== Autocomplete
+
+Six positional completion sources:
+
+[cols="1,2,2"]
+|===
+| Trigger | What it suggests | Example
+
+| `xref:`
+| Page targets in three scopes (bare, `module:page`, `component:module:page`)
+| `xref:in` → `xref:installation.adoc[]`
+
+| `xref:foo.adoc#`
+| Anchors known on the resolved page; falls back to workspace auxiliary anchors
+| `xref:guide.adoc#in` → `xref:guide.adoc#installation`
+
+| `{`
+| Attribute names — descriptor scope, page-level, and built-ins. Auto-inserts closing `}`
+| `{prod` → `{product-name}`
+
+| `image::` / `image:`
+| Images from the index (`module.images`), scoped to the current page's component
+| `image::lo` → `image::logo.png[]`
+
+| `include::`
+| Partials and examples as `partial$X` / `example$X` resource IDs
+| `include::int` → `include::partial$intro.adoc[]`
+
+| `[` (line start)
+| Block macros and admonitions (NOTE, TIP, WARNING, CAUTION, IMPORTANT, source, example, quote, …)
+| `[N` → `[NOTE]\n====\n\n====`
+
+| `[name,` (after macro)
+| Block attribute keys: title, role, id, cols, options, format, separator, caption, width, align, valign, alt, link, window, subs, tags, lines, leveloffset, reftext
+| `[source,java,t` → `[source,java,title=""]`
+|===
+
+== Hover tooltips
+
+* `xref:foo.adoc[]` — shows the resolved component:module:path or "Unresolved"
+* `{attr}` — shows the resolved attribute value, or "(built-in)", "(declared elsewhere)", "Unresolved"
+* `image::foo.png[]` — shows an inline thumbnail of the image plus its resolved vault path
+
+== Navigation
+
+* Ctrl/Cmd-click an `xref:` target to open the resolved page in the most recent leaf
+* The xref resolver fills in the current page's component and module as defaults, so `xref:other.adoc[]` from inside `docs/modules/ROOT/pages/index.adoc` correctly resolves to `docs:ROOT:other.adoc`
+
+== Folding
+
+A CodeMirror `foldService` creates fold ranges from each heading to the line before the next heading at the same or shallower depth. Works for all six AsciiDoc heading levels (`= Title` through `====== Sub-sub-sub-sub-section`). Use the standard Obsidian fold gutter or `Ctrl/Cmd-Shift-[` to fold sections.
+
+== Diagnostic decoration
+
+Broken xrefs are underlined with a red wavy line in the editor. Resolved xrefs get a dotted underline in the accent colour. The decoration updates live as you type.
+
+== Per-file scoping
+
+All editor extensions consult a shared `EditorContext` that tracks the active file's component, module, and AsciiDoc-ness. The plugin updates this on `active-leaf-change` and `file-open` events. This means xref defaults always reflect the file you're actually editing.

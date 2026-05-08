@@ -1,0 +1,111 @@
+= Antora integration
+
+The plugin understands Antora-specific concepts at every layer.
+
+== Component detection
+
+Detection is driven entirely by `antora.yml` files:
+
+* The scanner walks `vault.getFiles()` and treats any file named `antora.yml` as a component descriptor
+* The descriptor is parsed via https://github.com/nodeca/js-yaml[js-yaml] (not a regex) so multi-line values, lists, and quoted strings work correctly
+* `name`, `version`, and `asciidoc.attributes` are extracted
+* Files under the descriptor's directory contribute to the component if they match the conventional layout (`modules/<module>/{pages,partials,examples,assets/images}/`)
+
+== Multi-component workspaces
+
+A vault can contain multiple components — each `antora.yml` produces one. The index keys pages by `(component, version, module, path)` and resolves xrefs against the union.
+
+== External content sources
+
+Antora playbooks (`site.yml`, `*.playbook.yml`) often reference content sources outside the playbook directory. The plugin auto-discovers local sources via `parsePlaybooks`:
+
+[source,yaml]
+----
+content:
+  sources:
+    - url: ./local-relative      <1>
+    - url: /absolute/repo        <2>
+    - url: https://github.com/…  <3>
+    - url: git@github.com:…      <4>
+----
+<1> Local relative — resolved relative to the playbook
+<2> Local absolute — used as-is
+<3> Remote — skipped (we don't fetch)
+<4> Remote — skipped
+
+Local URLs feed a `NodeFileSource` that's automatically composited with the vault. Manually configured `External content roots` are merged with the auto-discovered set.
+
+[NOTE]
+====
+Auto-discovery is desktop-only because `NodeFileSource` uses `node:fs`. On mobile (when manifest is relaxed in the future) the plugin falls back to vault-only.
+====
+
+== Resource ID resolution
+
+Antora xref and include macros use a structured ID syntax that the plugin understands via `AntoraResourceResolver`:
+
+[cols="1,3"]
+|===
+| ID form | Resolves to
+
+| `partial$file.adoc`
+| `<componentRoot>/modules/<currentModule>/partials/file.adoc`
+
+| `example$file.txt`
+| `<componentRoot>/modules/<currentModule>/examples/file.txt`
+
+| `attachment$file.pdf`
+| `<componentRoot>/modules/<currentModule>/attachments/file.pdf`
+
+| `image$file.png`
+| `<componentRoot>/modules/<currentModule>/assets/images/file.png`
+
+| `mod:partial$file.adoc`
+| `<componentRoot>/modules/mod/partials/file.adoc`
+
+| `comp:mod:partial$file.adoc`
+| `<componentRootForComp>/modules/mod/partials/file.adoc`
+
+| anything without `family$`
+| Sibling-relative to the source file
+|===
+
+The resolver derives the component root from the source page's filesystem location, falling back to any indexed page in the requested component.
+
+== Navigation
+
+`nav.adoc` files are auto-discovered (by name) AND can be declared explicitly in `antora.yml`:
+
+[source,yaml]
+----
+nav:
+  - modules/ROOT/custom-nav.adoc
+----
+
+The parser recognises bulleted xrefs:
+
+[source,asciidoc]
+----
+* xref:index.adoc[Home]
+* xref:guides.adoc[Guides]
+** xref:guides/install.adoc[Install]
+*** xref:guides/install/quick.adoc[Quickstart]
+* Section heading        <1>
+----
+<1> Plain bullets become grouping labels (no link).
+
+The parsed tree is stored against the owning module and rendered in the *Antora Explorer* view with click-to-open links.
+
+== Attribute precedence
+
+For preview rendering, the merged attribute scope for a page is built as:
+
+. Built-ins (always present)
+. Descriptor `asciidoc.attributes` for the page's owning component
+. Page-level `:name: value` lines from the page header
+
+For diagnostics, the "known attribute names" set is the union of all three plus page-level names from any indexed page (so an attribute defined as a page-level value somewhere is still treated as known).
+
+== Build integration
+
+`Run Antora build` spawns the configured Antora binary against the playbook. Output streams line-by-line into the *Antora Build Console* view (capped at 5,000 lines to keep the DOM small). On completion, parsed errors and warnings open in the diagnostics view.

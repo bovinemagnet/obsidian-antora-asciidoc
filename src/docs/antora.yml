@@ -1,0 +1,12 @@
+name: obsidian-antora-asciidoc
+title: Obsidian Antora AsciiDoc
+version: '0.1'
+display_version: '0.1.0'
+nav:
+  - modules/ROOT/nav.adoc
+asciidoc:
+  attributes:
+    plugin-id: obsidian-antora-asciidoc
+    plugin-name: Antora AsciiDoc
+    min-obsidian-version: 1.5.0
+    license: Apache-2.0

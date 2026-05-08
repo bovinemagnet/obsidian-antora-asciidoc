@@ -24,6 +24,23 @@ export class DiagnosticsView extends ItemView {
     this.render();
   }
 
+  /**
+   * Replaces only the diagnostics for the given file path while keeping any
+   * other entries in place. Used by auto-validation so a single-file refresh
+   * does not blow away results from a prior workspace validation.
+   */
+  replaceDiagnosticsForFile(filePath: string, fileDiagnostics: Diagnostic[]): void {
+    this.diagnostics = [
+      ...this.diagnostics.filter((diagnostic) => diagnostic.filePath !== filePath),
+      ...fileDiagnostics,
+    ];
+    this.render();
+  }
+
+  getDiagnosticsForFile(filePath: string): Diagnostic[] {
+    return this.diagnostics.filter((diagnostic) => diagnostic.filePath === filePath);
+  }
+
   private render(): void {
     const { contentEl } = this;
     contentEl.empty();

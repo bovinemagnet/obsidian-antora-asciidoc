@@ -1,0 +1,48 @@
+= Installation
+
+`{plugin-name}` is desktop-only and currently distributed via manual install.
+
+== Requirements
+
+* Obsidian {min-obsidian-version} or later
+* Desktop platform (Windows, macOS, Linux)
+* For the Antora build command: `antora` on PATH (or set `Antora executable path` in settings)
+* For Vale linting: `vale` on PATH (or set `Vale executable` in settings)
+
+== Manual install
+
+. Build the plugin from source:
++
+[source,bash]
+----
+npm install
+npm run build
+----
+
+. Copy these files into your vault's plugins folder:
++
+* `main.js`
+* `manifest.json`
+* `styles.css`
++
+The destination is `<vault>/.obsidian/plugins/{plugin-id}/`. Create the folder if it doesn't exist.
+
+. In Obsidian: *Settings → Community plugins*
++
+* Enable community plugins
+* Refresh the installed-plugins list
+* Enable *{plugin-name}*
+
+== From a release archive
+
+When release builds are published, download the `obsidian-antora-asciidoc-<version>.zip` artifact and unzip it into `<vault>/.obsidian/plugins/`.
+
+== Verifying the install
+
+After enabling the plugin:
+
+. Open the command palette (Ctrl/Cmd-P)
+. Type `Antora` — you should see commands like `Reindex Antora workspace`, `Validate current AsciiDoc file`, `Open Antora explorer`
+. Open an `.adoc` file — the editor should treat it as markdown for editing and surface AsciiDoc-aware completions when you type `xref:`, `image::`, `{`, or `[`
+
+If the commands aren't visible, check the Obsidian developer console (`Ctrl/Cmd+Shift+I`) for plugin load errors.

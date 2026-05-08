@@ -1,8 +1,13 @@
 import { EditorView } from '@codemirror/view';
 
-export function createXrefNavigation(onNavigate: (target: string) => Promise<void> | void) {
+import { EditorContext } from './EditorContext';
+
+export function createXrefNavigation(context: EditorContext, onNavigate: (target: string) => Promise<void> | void) {
   return EditorView.domEventHandlers({
     mousedown(event, view) {
+      if (!context.isAsciiDocActive()) {
+        return false;
+      }
       if (!event.metaKey && !event.ctrlKey) {
         return false;
       }

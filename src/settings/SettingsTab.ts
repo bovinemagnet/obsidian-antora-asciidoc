@@ -1,4 +1,4 @@
-import { App, PluginSettingTab, Setting } from 'obsidian';
+import { App, Platform, PluginSettingTab, Setting } from 'obsidian';
 
 import AntoraAsciidocPlugin from '../main';
 
@@ -16,6 +16,16 @@ export class SettingsTab extends PluginSettingTab {
       .addToggle((toggle) =>
         toggle.setValue(this.plugin.settings.diagnosticsEnabled).onChange(async (value) => {
           this.plugin.settings.diagnosticsEnabled = value;
+          await this.plugin.saveSettings();
+        }),
+      );
+
+    new Setting(containerEl)
+      .setName('Auto-validate on save')
+      .setDesc('Re-run xref/include/attribute checks shortly after a file changes.')
+      .addToggle((toggle) =>
+        toggle.setValue(this.plugin.settings.autoValidateOnSave).onChange(async (value) => {
+          this.plugin.settings.autoValidateOnSave = value;
           await this.plugin.saveSettings();
         }),
       );
@@ -81,5 +91,40 @@ export class SettingsTab extends PluginSettingTab {
           await this.plugin.saveSettings();
         }),
       );
+
+    if (Platform.isDesktop) {
+      new Setting(containerEl)
+        .setName('External content roots')
+        .setDesc('Comma separated absolute paths scanned in addition to the vault. Reload the plugin after changing.')
+        .addText((text) =>
+          text.setValue(this.plugin.settings.externalContentRoots.join(',')).onChange(async (value) => {
+            this.plugin.settings.externalContentRoots = value
+              .split(',')
+              .map((entry) => entry.trim())
+              .filter(Boolean);
+            await this.plugin.saveSettings();
+          }),
+        );
+
+      new Setting(containerEl)
+        .setName('Vale executable')
+        .setDesc('Command used to run Vale. Leave empty to disable.')
+        .addText((text) =>
+          text.setValue(this.plugin.settings.valeExecutablePath).onChange(async (value) => {
+            this.plugin.settings.valeExecutablePath = value.trim();
+            await this.plugin.saveSettings();
+          }),
+        );
+
+      new Setting(containerEl)
+        .setName('Vale working directory')
+        .setDesc('Directory containing .vale.ini. Defaults to the playbook directory when empty.')
+        .addText((text) =>
+          text.setValue(this.plugin.settings.valeWorkingDirectory).onChange(async (value) => {
+            this.plugin.settings.valeWorkingDirectory = value.trim();
+            await this.plugin.saveSettings();
+          }),
+        );
+    }
   }
 }
