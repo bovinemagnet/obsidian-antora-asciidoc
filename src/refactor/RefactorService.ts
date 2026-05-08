@@ -35,6 +35,13 @@ export interface PageRenameOptions {
   newModule?: string;
 }
 
+export interface ModuleRenameOptions {
+  /** Component the module lives in. */
+  component: string;
+  oldModuleName: string;
+  newModuleName: string;
+}
+
 export interface AnchorRenameOptions {
   /** Vault path of the page that owns the anchor. */
   ownerFilePath: string;
@@ -277,6 +284,97 @@ export class RefactorService {
     return plan;
   }
 
+  /**
+   * Plans a module rename: walks every file under the component's
+   * `modules/<old>/` folder and produces file moves to `modules/<new>/`,
+   * plus xref rewrites across the workspace where the old module name
+   * appears as a target scope.
+   */
+  async planModuleRename(options: ModuleRenameOptions): Promise<RefactorPlan> {
+    if (options.oldModuleName === options.newModuleName) {
+      return { edits: [], fileChanges: new Map() };
+    }
+    const componentRoot = this.findComponentRoot(options.component);
+    if (!componentRoot) {
+      throw new Error(`Component is not indexed: ${options.component}`);
+    }
+    const oldPrefix = `${componentRoot}/modules/${options.oldModuleName}/`;
+    const newPrefix = `${componentRoot}/modules/${options.newModuleName}/`;
+
+    const plan: RefactorPlan = { edits: [], fileChanges: new Map() };
+    const moves: Array<{ from: string; to: string }> = [];
+
+    for (const file of this.source.list()) {
+      if (file.path.startsWith(oldPrefix)) {
+        moves.push({ from: file.path, to: newPrefix + file.path.slice(oldPrefix.length) });
+      }
+    }
+
+    // Module renames affect xref scope strings. Walk every adoc file and
+    // rewrite `module:` and `component:module:` mentions of the old name to
+    // the new name when they resolve into the renamed module.
+    for (const file of this.adocFiles()) {
+      const content = await this.source.read(file);
+      const symbols = this.parser.parseSymbols(content);
+      const sourcePage = this.index.getPageByFilePath(file.path);
+      const defaults = this.deriveDefaultsForFile(file.path, sourcePage);
+
+      let updated = content;
+      let touched = false;
+      const xrefs = [...symbols.xrefs].reverse();
+
+      for (const xref of xrefs) {
+        const newTarget = rewriteScopeForModuleRename(
+          xref.target,
+          options.component,
+          options.oldModuleName,
+          options.newModuleName,
+          defaults,
+        );
+        if (newTarget === xref.target) {
+          continue;
+        }
+        updated = replaceAtPosition(updated, xref.line, xref.column, `xref:${xref.target}[`, `xref:${newTarget}[`);
+        plan.edits.push({
+          filePath: file.path,
+          line: xref.line,
+          column: xref.column,
+          originalText: xref.target,
+          replacementText: newTarget,
+        });
+        touched = true;
+      }
+
+      if (touched) {
+        plan.fileChanges.set(file.path, updated);
+      }
+    }
+
+    // The plan only carries a single `fileMove`; for module rename we expose
+    // a separate `moves` array via a distinct property the caller iterates.
+    (plan as RefactorPlan & { moves?: Array<{ from: string; to: string }> }).moves = moves;
+    return plan;
+  }
+
+  private findComponentRoot(componentName: string): string | undefined {
+    for (const component of this.index.getComponents()) {
+      if (component.name !== componentName) {
+        continue;
+      }
+      for (const version of component.versions.values()) {
+        for (const module of version.modules.values()) {
+          for (const page of module.pages) {
+            const idx = page.filePath.indexOf('/modules/');
+            if (idx > 0) {
+              return page.filePath.slice(0, idx);
+            }
+          }
+        }
+      }
+    }
+    return undefined;
+  }
+
   private adocFiles(): SourceFile[] {
     return this.source.list().filter((file) => /^(adoc|asciidoc)$/i.test(file.extension));
   }
@@ -340,6 +438,47 @@ function rewritePageTarget(
 
   // component:module:page is always sufficient.
   return `${newOwner.component}:${newOwner.module}:${newOwner.path}${anchorSuffix}`;
+}
+
+/**
+ * Rewrites the module portion of an xref target if it points into the
+ * module being renamed. Same-component sources may use bare or `module:`
+ * forms; cross-component sources use `component:module:` form.
+ *
+ * `defaults` is the source file's resolution context; we use it to know
+ * whether a bare `xref:foo.adoc[]` would have resolved against the renamed
+ * module (in which case it stays bare) or some other module (no change).
+ */
+function rewriteScopeForModuleRename(
+  originalTarget: string,
+  component: string,
+  oldModuleName: string,
+  newModuleName: string,
+  defaults: { component?: string; module?: string },
+): string {
+  const [pathPart, anchor] = originalTarget.split('#');
+  const segments = pathPart.split(':');
+  const anchorSuffix = anchor !== undefined ? `#${anchor}` : '';
+
+  if (segments.length === 1) {
+    // Bare form. Source's defaults tell us which module it resolves into.
+    // We don't rewrite bare forms — the source page itself is moving along
+    // with the module, so its own defaults will follow it.
+    return originalTarget;
+  }
+  if (segments.length === 2) {
+    // module:page form. Rewrite when the source's component matches and the
+    // module name is the renamed one.
+    if (defaults.component === component && segments[0] === oldModuleName) {
+      return `${newModuleName}:${segments[1]}${anchorSuffix}`;
+    }
+    return originalTarget;
+  }
+  // component:module:page
+  if (segments[0] === component && segments[1] === oldModuleName) {
+    return `${component}:${newModuleName}:${segments.slice(2).join(':')}${anchorSuffix}`;
+  }
+  return originalTarget;
 }
 
 function replaceAnchorInTarget(originalTarget: string, oldAnchor: string, newAnchor: string): string {

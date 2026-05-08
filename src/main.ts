@@ -35,12 +35,15 @@ import { createXrefNavigation } from './editor/XrefNavigation';
 import { DiagnosticsService } from './diagnostics/DiagnosticsService';
 import { defaultFilenameFor, ExportFormat, serialiseDiagnostics } from './diagnostics/DiagnosticsExporter';
 import { Diagnostic } from './diagnostics/Diagnostic';
+import { findOrphanPages } from './diagnostics/OrphanPageLint';
 import { deriveGraphEdges } from './graph/GraphEdgeDeriver';
 import { GraphSyncApplier } from './graph/GraphSyncApplier';
 import { CompositeFileSource } from './io/CompositeFileSource';
 import { FileSource } from './io/FileSource';
 import { NodeFileSource } from './io/NodeFileSource';
 import { VaultFileSource } from './io/VaultFileSource';
+import { buildComponentScaffold } from './asciidoc/ComponentScaffold';
+import { ComponentScaffoldModal } from './refactor/ComponentScaffoldModal';
 import { RefactorService } from './refactor/RefactorService';
 import { RenameModal } from './refactor/RenameModal';
 import { SettingsTab } from './settings/SettingsTab';
@@ -295,6 +298,18 @@ export default class AntoraAsciidocPlugin extends Plugin {
     });
 
     this.addCommand({
+      id: 'rename-current-module',
+      name: 'Rename current page\'s module',
+      callback: async () => this.openRenameModulePrompt(),
+    });
+
+    this.addCommand({
+      id: 'new-antora-component',
+      name: 'New Antora component…',
+      callback: () => this.openNewComponentPrompt(),
+    });
+
+    this.addCommand({
       id: 'find-references-to-current-page',
       name: 'Find references to current page',
       callback: async () => this.findReferencesToCurrentPage(),
@@ -304,6 +319,12 @@ export default class AntoraAsciidocPlugin extends Plugin {
       id: 'list-references-from-current-page',
       name: 'List references from current page',
       callback: async () => this.listReferencesFromCurrentPage(),
+    });
+
+    this.addCommand({
+      id: 'find-orphan-pages',
+      name: 'Find orphan pages',
+      callback: async () => this.findOrphanPagesCommand(),
     });
 
     this.addCommand({
@@ -702,6 +723,17 @@ export default class AntoraAsciidocPlugin extends Plugin {
     }
   }
 
+  private async findOrphanPagesCommand(): Promise<void> {
+    const edges = await deriveGraphEdges(this.fileSource, this.index, this.parser);
+    const orphans = findOrphanPages(this.index, edges);
+    if (orphans.length === 0) {
+      new Notice('No orphan pages — every page is reachable from a nav.adoc or another page.');
+      return;
+    }
+    await this.openDiagnosticsView(orphans);
+    new Notice(`Found ${orphans.length} orphan page(s).`);
+  }
+
   private async listReferencesFromCurrentPage(): Promise<void> {
     const file = this.app.workspace.getActiveFile();
     if (!(file instanceof TFile) || !isAsciiDocPath(file.path)) {
@@ -811,6 +843,101 @@ export default class AntoraAsciidocPlugin extends Plugin {
           new Notice(`Renamed ${pageEntry.path} → ${value}. Updated ${plan.edits.length} reference(s).`);
         } catch (error) {
           this.logger.error('Page rename failed', error);
+          new Notice(`Rename failed: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      },
+    }).open();
+  }
+
+  private openNewComponentPrompt(): void {
+    new ComponentScaffoldModal(this.app, {
+      initialName: 'docs',
+      initialVersion: '1.0',
+      initialRoot: 'docs',
+      onSubmit: async (input) => {
+        try {
+          const files = buildComponentScaffold({
+            vaultRoot: input.root,
+            name: input.name,
+            version: input.version,
+            title: input.title || undefined,
+          });
+          for (const path of files.keys()) {
+            const existing = this.app.vault.getAbstractFileByPath(path);
+            if (existing) {
+              new Notice(`Aborted: ${path} already exists.`);
+              return;
+            }
+          }
+          for (const [path, content] of files) {
+            await this.ensureParentFolder(path);
+            await this.app.vault.create(path, content);
+          }
+          await this.reindexWorkspace();
+          new Notice(`Created Antora component '${input.name}' in ${input.root}/.`);
+        } catch (error) {
+          this.logger.error('Component scaffold failed', error);
+          new Notice(`Scaffold failed: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      },
+    }).open();
+  }
+
+  private async ensureParentFolder(filePath: string): Promise<void> {
+    const folder = filePath.split('/').slice(0, -1).join('/');
+    if (!folder) {
+      return;
+    }
+    if (this.app.vault.getAbstractFileByPath(folder)) {
+      return;
+    }
+    await this.app.vault.createFolder(folder);
+  }
+
+  private async openRenameModulePrompt(): Promise<void> {
+    const file = this.app.workspace.getActiveFile();
+    if (!(file instanceof TFile) || !isAsciiDocPath(file.path)) {
+      new Notice('Open an .adoc or .asciidoc file first.');
+      return;
+    }
+    const page = this.index.getPageByFilePath(file.path);
+    if (!page) {
+      new Notice('Active file is not part of any indexed Antora component.');
+      return;
+    }
+    const componentName = page.component;
+    const oldModule = page.module;
+
+    new RenameModal(this.app, {
+      title: `Rename module ${oldModule}`,
+      description: `Component: ${componentName}`,
+      initialValue: oldModule,
+      onPreview: async (value) => {
+        if (!value || value === oldModule) {
+          return 0;
+        }
+        const plan = await this.refactorService.planModuleRename({
+          component: componentName,
+          oldModuleName: oldModule,
+          newModuleName: value,
+        });
+        return plan.edits.length;
+      },
+      onSubmit: async (value) => {
+        if (!value || value === oldModule) {
+          new Notice('Rename cancelled (name unchanged).');
+          return;
+        }
+        try {
+          const plan = await this.refactorService.planModuleRename({
+            component: componentName,
+            oldModuleName: oldModule,
+            newModuleName: value,
+          });
+          await this.applyRefactorPlan(plan);
+          new Notice(`Renamed module ${oldModule} → ${value}. Updated ${plan.edits.length} reference(s).`);
+        } catch (error) {
+          this.logger.error('Module rename failed', error);
           new Notice(`Rename failed: ${error instanceof Error ? error.message : String(error)}`);
         }
       },
@@ -944,7 +1071,11 @@ export default class AntoraAsciidocPlugin extends Plugin {
     }).open();
   }
 
-  private async applyRefactorPlan(plan: { fileChanges: Map<string, string>; fileMove?: { from: string; to: string } }): Promise<void> {
+  private async applyRefactorPlan(plan: {
+    fileChanges: Map<string, string>;
+    fileMove?: { from: string; to: string };
+    moves?: Array<{ from: string; to: string }>;
+  }): Promise<void> {
     /**
      * Snapshot every file we are about to touch before mutating anything. If
      * any modify or rename throws, walk the snapshot in reverse and restore
@@ -979,6 +1110,15 @@ export default class AntoraAsciidocPlugin extends Plugin {
         if (file instanceof TFile) {
           await this.app.vault.rename(file, plan.fileMove.to);
           renameDone = true;
+        }
+      }
+
+      if (plan.moves) {
+        for (const move of plan.moves) {
+          const file = this.app.vault.getAbstractFileByPath(move.from);
+          if (file instanceof TFile) {
+            await this.app.vault.rename(file, move.to);
+          }
         }
       }
     } catch (error) {

@@ -8,6 +8,7 @@ import { BUILTIN_ATTRIBUTE_NAMES } from '../asciidoc/BuiltinAttributes';
 import { findDisabledRanges, isLineWithinDisabledRange } from '../asciidoc/ConditionalBlocks';
 import { FileSource } from '../io/FileSource';
 import { Diagnostic } from './Diagnostic';
+import { lintHeadingHierarchy } from './HeadingHierarchyLint';
 import { IncludeValidator } from './IncludeValidator';
 import { XrefValidator } from './XrefValidator';
 
@@ -34,6 +35,7 @@ export class DiagnosticsService {
     return [
       ...this.xrefValidator.validate(file.path, symbols),
       ...this.includeValidator.validate(file.path, symbols),
+      ...lintHeadingHierarchy(content, file.path),
       ...symbols.attributes
         .filter((attribute) => !this.isAttributeKnown(attribute.name))
         .filter((attribute) => !isLineWithinDisabledRange(attribute.line, disabledRanges))
