@@ -1,7 +1,7 @@
 {
 	"id": "obsidian-antora-asciidoc",
 	"name": "Antora AsciiDoc",
-	"version": "0.1.6",
+	"version": "0.1.7",
 	"minAppVersion": "1.5.0",
 	"description": "Authoring support for Antora-based AsciiDoc documentation projects: xref autocomplete and validation, attribute and image hover, live preview with Mermaid and tabs, page/anchor refactoring, Antora build runner, Vale lint integration.",
 	"author": "bovinemagnet",

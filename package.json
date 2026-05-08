@@ -1,6 +1,6 @@
 {
   "name": "obsidian-antora-asciidoc",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "Obsidian plugin for Antora-focused AsciiDoc authoring",
   "main": "main.js",
   "engines": {
@@ -12,6 +12,7 @@
     "lint": "eslint . --ext .ts",
     "test": "vitest run",
     "test:watch": "vitest",
+    "bench": "vitest bench --run",
     "version": "node version-bump.mjs && git add manifest.json versions.json"
   },
   "keywords": [
