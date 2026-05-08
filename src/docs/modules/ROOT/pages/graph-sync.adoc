@@ -1,0 +1,27 @@
+= Graph view integration
+
+`{plugin-name}` can feed Obsidian's built-in graph view with the xref edges from your Antora project, so the graph reflects how pages link to each other.
+
+== Enabling graph sync
+
+. *Settings → Antora AsciiDoc*
+. Toggle *Sync xrefs to Obsidian graph* on
+. (Optional) Toggle *Include `include::` edges in graph sync* if you want partial/example dependencies on the graph too
+
+The plugin runs the sync after every workspace scan. To force an immediate refresh without changing files, run `Sync xrefs to Obsidian graph` from the command palette.
+
+== What you get
+
+Each `.adoc` file becomes a node in Obsidian's graph view. An edge appears between pages whenever one xrefs the other. The local-graph pane in the right sidebar shows the immediate neighbourhood of the active file.
+
+Filter and styling controls work the same as for Markdown notes — search filters apply, tag colours apply, the orphan filter hides isolated pages.
+
+== Caveats
+
+* This uses an *undocumented* part of Obsidian's API (`metadataCache.resolvedLinks` plus the `'resolve'` event). It's been stable for years across many community plugins, but a future Obsidian release could change it. Every interaction is wrapped in `try/catch`; if the API changes, the graph silently stops updating instead of crashing the plugin.
+* Edges are *additive* — they sit alongside whatever links Obsidian's Markdown parser already found in the file. For pages that aren't valid Markdown (raw `=` headings, etc.) Obsidian's parser typically finds no links, so xrefs are the only edges.
+* Disabling the plugin or turning the setting off clears every entry the plugin wrote, so the graph won't show stale edges.
+
+== Performance
+
+For 5,000-page workspaces the sync runs in well under a second. The deriver walks every file once per scan; subsequent per-file modifications don't trigger a re-derive (you'd run `Sync xrefs to Obsidian graph` manually if you want a refresh after a single edit). Future versions may make this incremental.

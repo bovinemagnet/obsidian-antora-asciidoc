@@ -20,6 +20,15 @@ export interface PluginSettings {
   autoValidateOnSave: boolean;
   /** Debounce in milliseconds for auto-validation (defaults to 750ms). */
   autoValidateDebounceMs: number;
+  /**
+   * When true, after each scan the plugin writes its xref edges into
+   * Obsidian's `metadataCache.resolvedLinks` so the graph view shows them.
+   * Uses an undocumented Obsidian API — disable if a future Obsidian release
+   * misbehaves.
+   */
+  syncToObsidianGraph: boolean;
+  /** When true, also include `include::` edges in the graph sync. */
+  syncIncludeEdgesToGraph: boolean;
 }
 
 export const DEFAULT_SETTINGS: PluginSettings = {
@@ -35,4 +44,6 @@ export const DEFAULT_SETTINGS: PluginSettings = {
   valeWorkingDirectory: '',
   autoValidateOnSave: true,
   autoValidateDebounceMs: 750,
+  syncToObsidianGraph: false,
+  syncIncludeEdgesToGraph: false,
 };

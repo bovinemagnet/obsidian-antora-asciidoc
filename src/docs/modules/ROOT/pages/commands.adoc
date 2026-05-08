@@ -44,3 +44,8 @@ Detects an anchor declaration (`[[id]]`, `[#id]`, or `[id="id"]`) on the cursor'
 
 `Find references to current page`::
 Lists every xref pointing at the active page in the diagnostics view (severity `info`). Useful before deciding whether to rename or move a page.
+
+== Graph integration
+
+`Sync xrefs to Obsidian graph`::
+Forces a fresh re-derive of xref edges and writes them into Obsidian's `metadataCache.resolvedLinks`. The graph view then shows pages and their xref connections. Auto-runs after every scan when *Sync xrefs to Obsidian graph* is on. See xref:graph-sync.adoc[Graph view integration] for the full story.

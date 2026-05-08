@@ -31,6 +31,26 @@ export class SettingsTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
+      .setName('Sync xrefs to Obsidian graph')
+      .setDesc('Inject xref edges into Obsidian’s graph view. Uses an undocumented API; disable if the graph misbehaves.')
+      .addToggle((toggle) =>
+        toggle.setValue(this.plugin.settings.syncToObsidianGraph).onChange(async (value) => {
+          this.plugin.settings.syncToObsidianGraph = value;
+          await this.plugin.saveSettings();
+        }),
+      );
+
+    new Setting(containerEl)
+      .setName('Include `include::` edges in graph sync')
+      .setDesc('Also emit edges for include directives. Produces denser graphs.')
+      .addToggle((toggle) =>
+        toggle.setValue(this.plugin.settings.syncIncludeEdgesToGraph).onChange(async (value) => {
+          this.plugin.settings.syncIncludeEdgesToGraph = value;
+          await this.plugin.saveSettings();
+        }),
+      );
+
+    new Setting(containerEl)
       .setName('Enable autocomplete')
       .addToggle((toggle) =>
         toggle.setValue(this.plugin.settings.autocompleteEnabled).onChange(async (value) => {

@@ -7,5 +7,6 @@
 * xref:diagnostics.adoc[Diagnostics & linting]
 * xref:refactoring.adoc[Refactoring]
 * xref:antora-integration.adoc[Antora integration]
+* xref:graph-sync.adoc[Graph view integration]
 * xref:architecture.adoc[Architecture]
 * xref:development.adoc[Development]

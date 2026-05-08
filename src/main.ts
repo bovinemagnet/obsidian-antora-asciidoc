@@ -31,6 +31,8 @@ import { createXrefNavigation } from './editor/XrefNavigation';
 import { DiagnosticsService } from './diagnostics/DiagnosticsService';
 import { defaultFilenameFor, ExportFormat, serialiseDiagnostics } from './diagnostics/DiagnosticsExporter';
 import { Diagnostic } from './diagnostics/Diagnostic';
+import { deriveGraphEdges } from './graph/GraphEdgeDeriver';
+import { GraphSyncApplier } from './graph/GraphSyncApplier';
 import { CompositeFileSource } from './io/CompositeFileSource';
 import { FileSource } from './io/FileSource';
 import { NodeFileSource } from './io/NodeFileSource';
@@ -64,6 +66,7 @@ export default class AntoraAsciidocPlugin extends Plugin {
   private diagnosticsService!: DiagnosticsService;
   private previewRenderer!: AsciiDocPreviewRenderer;
   private refactorService!: RefactorService;
+  private graphSyncApplier!: GraphSyncApplier;
   private editorExtensions: Extension[] = [];
 
   async onload(): Promise<void> {
@@ -77,6 +80,7 @@ export default class AntoraAsciidocPlugin extends Plugin {
     this.diagnosticsService = new DiagnosticsService(this.app.vault, this.parser, this.index, this.fileSource);
     this.previewRenderer = new AsciiDocPreviewRenderer(this.index, this.fileSource);
     this.refactorService = new RefactorService(this.fileSource, this.index, this.parser);
+    this.graphSyncApplier = new GraphSyncApplier(this.app);
 
     this.registerExtensions(['adoc', 'asciidoc'], 'markdown');
     this.registerView(ANTORA_EXPLORER_VIEW_TYPE, (leaf) => new AntoraExplorerView(leaf, this.index));
@@ -109,6 +113,8 @@ export default class AntoraAsciidocPlugin extends Plugin {
 
   onunload(): void {
     // Obsidian guidance: do not detach leaves here — preserves the user's layout across reloads.
+    // Clear graph-sync entries so a disabled plugin doesn't leave phantom edges.
+    this.graphSyncApplier?.clear();
   }
 
   async loadSettings(): Promise<void> {
@@ -120,6 +126,11 @@ export default class AntoraAsciidocPlugin extends Plugin {
     this.rebuildEditorExtensions();
     this.app.workspace.updateOptions();
     this.scanner?.setIgnorePaths(this.settings.ignorePaths);
+    if (!this.settings.syncToObsidianGraph) {
+      this.graphSyncApplier?.clear();
+    } else {
+      void this.maybeSyncGraph();
+    }
   }
 
   private buildFileSource(): FileSource {
@@ -232,6 +243,22 @@ export default class AntoraAsciidocPlugin extends Plugin {
       id: 'export-diagnostics-csv',
       name: 'Export diagnostics report (CSV)',
       callback: async () => this.exportDiagnostics('csv'),
+    });
+
+    this.addCommand({
+      id: 'sync-xrefs-to-graph',
+      name: 'Sync xrefs to Obsidian graph',
+      callback: async () => {
+        const edges = await deriveGraphEdges(this.fileSource, this.index, this.parser, {
+          includeIncludeEdges: this.settings.syncIncludeEdgesToGraph,
+        });
+        const outcome = this.graphSyncApplier.apply(edges);
+        if (outcome.failed) {
+          new Notice('Graph sync failed — Obsidian metadata API may have changed.');
+        } else {
+          new Notice(`Synced ${outcome.written.length} source(s) to the graph.`);
+        }
+      },
     });
 
     this.addCommand({
@@ -407,9 +434,24 @@ export default class AntoraAsciidocPlugin extends Plugin {
     }
 
     await this.refreshFileSourceFromPlaybooks(scan.projects);
+    await this.maybeSyncGraph();
 
     const view = this.getExplorerView();
     view?.render();
+  }
+
+  private async maybeSyncGraph(): Promise<void> {
+    if (!this.settings.syncToObsidianGraph) {
+      return;
+    }
+    try {
+      const edges = await deriveGraphEdges(this.fileSource, this.index, this.parser, {
+        includeIncludeEdges: this.settings.syncIncludeEdgesToGraph,
+      });
+      this.graphSyncApplier.apply(edges);
+    } catch (error) {
+      this.logger.error('Graph sync failed', error);
+    }
   }
 
   /**
