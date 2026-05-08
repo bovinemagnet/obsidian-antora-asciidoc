@@ -1,0 +1,183 @@
+.antora-xref-token {
+  color: var(--text-accent);
+  text-decoration: underline dotted;
+}
+
+.antora-xref-broken {
+  color: var(--text-error);
+  text-decoration: underline wavy var(--text-error);
+}
+
+.antora-explorer-tree h4 {
+  margin: 0.4rem 0 0.2rem;
+}
+
+.antora-explorer-version {
+  margin-left: 0.5rem;
+  color: var(--text-muted);
+  font-size: 0.85em;
+}
+
+.antora-explorer-module {
+  margin-left: 1rem;
+}
+
+.antora-explorer-module-header {
+  font-weight: 600;
+  margin-top: 0.4rem;
+}
+
+.antora-explorer-nav,
+.antora-explorer-nav ul {
+  list-style: none;
+  padding-left: 0.8rem;
+  margin: 0.2rem 0;
+}
+
+.antora-explorer-nav-link {
+  cursor: pointer;
+  color: var(--text-accent);
+}
+
+.antora-explorer-nav-link:hover {
+  text-decoration: underline;
+}
+
+.antora-explorer-nav-label {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.antora-explorer-counts {
+  color: var(--text-muted);
+  font-size: 0.85em;
+  margin-left: 0.4rem;
+}
+
+.antora-preview-pane {
+  padding: 1rem;
+  overflow: auto;
+  font-family: var(--font-text);
+}
+
+.antora-preview-pane pre {
+  background: var(--background-secondary);
+  padding: 0.5rem;
+  border-radius: 4px;
+  overflow-x: auto;
+}
+
+.antora-preview-pane h1,
+.antora-preview-pane h2,
+.antora-preview-pane h3 {
+  border-bottom: 1px solid var(--background-modifier-border);
+  padding-bottom: 0.2rem;
+}
+
+.antora-xref-link {
+  cursor: pointer;
+  color: var(--text-accent);
+}
+
+.antora-xref-link:hover {
+  text-decoration: underline;
+}
+
+.antora-build-console {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  font-family: var(--font-monospace);
+  font-size: 0.85em;
+}
+
+.antora-build-console-summary {
+  padding: 0.4rem 0.6rem;
+  border-bottom: 1px solid var(--background-modifier-border);
+  background: var(--background-secondary);
+}
+
+.antora-build-console-log {
+  flex: 1;
+  overflow: auto;
+  padding: 0.4rem 0.6rem;
+}
+
+.antora-build-line {
+  white-space: pre-wrap;
+  line-height: 1.3;
+}
+
+.antora-build-line-stderr {
+  color: var(--text-error);
+}
+
+.antora-build-failed {
+  color: var(--text-error);
+  font-weight: bold;
+}
+
+.tabs {
+  margin: 1rem 0;
+}
+
+.tabs .tablist > ul {
+  display: flex;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.tabs .tablist > ul > li {
+  cursor: pointer;
+  padding: 0.4rem 0.8rem;
+  border: 1px solid transparent;
+  border-bottom: none;
+  margin-right: 0.2rem;
+  border-top-left-radius: 4px;
+  border-top-right-radius: 4px;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.tabs .tablist > ul > li.is-selected {
+  background: var(--background-secondary);
+  border-color: var(--background-modifier-border);
+  color: var(--text-normal);
+  margin-bottom: -1px;
+}
+
+.tabs .tabpanel {
+  padding: 0.6rem 0.8rem;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-top: none;
+  border-radius: 0 0 4px 4px;
+}
+
+.tabs .tabpanel[hidden] {
+  display: none;
+}
+
+.antora-image-hover {
+  max-width: 320px;
+  padding: 0.4rem;
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+}
+
+.antora-image-hover-img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: 4px;
+}
+
+.antora-image-hover-path {
+  margin-top: 0.3rem;
+  font-size: 0.8em;
+  color: var(--text-muted);
+  word-break: break-all;
+}
