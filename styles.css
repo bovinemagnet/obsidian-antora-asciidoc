@@ -254,6 +254,11 @@
   color: var(--text-accent);
 }
 
+.antora-status-bar {
+  color: var(--text-muted);
+  font-size: 0.85em;
+}
+
 .antora-image-missing {
   display: inline-block;
   padding: 0.6rem 1rem;

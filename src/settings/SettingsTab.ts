@@ -21,6 +21,16 @@ export class SettingsTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
+      .setName('Auto-open preview')
+      .setDesc('Open the AsciiDoc preview pane in a side leaf the first time an .adoc file is opened in a session.')
+      .addToggle((toggle) =>
+        toggle.setValue(this.plugin.settings.autoOpenPreview).onChange(async (value) => {
+          this.plugin.settings.autoOpenPreview = value;
+          await this.plugin.saveSettings();
+        }),
+      );
+
+    new Setting(containerEl)
       .setName('Auto-validate on save')
       .setDesc('Re-run xref/include/attribute checks shortly after a file changes.')
       .addToggle((toggle) =>

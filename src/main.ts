@@ -45,6 +45,7 @@ import { debounce } from './util/Debounce';
 import { isAsciiDocPath } from './util/FileUtils';
 import { Logger } from './util/Logger';
 import { ANTORA_EXPLORER_VIEW_TYPE, AntoraExplorerView } from './views/AntoraExplorerView';
+import { AntoraPagePicker } from './views/AntoraPagePicker';
 import { ASCIIDOC_PREVIEW_VIEW_TYPE, AsciiDocPreviewView } from './views/AsciiDocPreviewView';
 import { BUILD_CONSOLE_VIEW_TYPE, BuildConsoleView } from './views/BuildConsoleView';
 import { DiagnosticsView, DIAGNOSTICS_VIEW_TYPE } from './views/DiagnosticsView';
@@ -68,6 +69,7 @@ export default class AntoraAsciidocPlugin extends Plugin {
   private refactorService!: RefactorService;
   private graphSyncApplier!: GraphSyncApplier;
   private editorExtensions: Extension[] = [];
+  private autoPreviewOpened = false;
 
   async onload(): Promise<void> {
     await this.loadSettings();
@@ -105,6 +107,8 @@ export default class AntoraAsciidocPlugin extends Plugin {
 
     this.addSettingTab(new SettingsTab(this.app, this));
     this.registerCommands();
+    this.registerRibbonIcons();
+    this.registerStatusBar();
     this.registerVaultEvents();
     this.registerWorkspaceEvents();
 
@@ -168,6 +172,38 @@ export default class AntoraAsciidocPlugin extends Plugin {
     }
   }
 
+  private registerRibbonIcons(): void {
+    this.addRibbonIcon('file-text', 'Open AsciiDoc preview', async () => {
+      const leaf = await this.activateView(ASCIIDOC_PREVIEW_VIEW_TYPE);
+      const view = leaf.view;
+      if (view instanceof AsciiDocPreviewView) {
+        await view.refreshFromActiveFile();
+      }
+    });
+  }
+
+  private registerStatusBar(): void {
+    const statusBarItem = this.addStatusBarItem();
+    statusBarItem.addClass('antora-status-bar');
+    const update = () => {
+      const file = this.app.workspace.getActiveFile();
+      if (!file || !isAsciiDocPath(file.path)) {
+        statusBarItem.setText('');
+        return;
+      }
+      const page = this.index.getPageByFilePath(file.path);
+      if (page) {
+        statusBarItem.setText(`Antora: ${page.component}@${page.version}:${page.module}`);
+      } else {
+        const context = this.index.getComponentContextForPath(file.path);
+        statusBarItem.setText(context ? `Antora: ${context.component}:${context.module}` : 'Antora: (unindexed)');
+      }
+    };
+    update();
+    this.registerEvent(this.app.workspace.on('active-leaf-change', update));
+    this.registerEvent(this.app.workspace.on('file-open', update));
+  }
+
   private registerCommands(): void {
     this.addCommand({
       id: 'reindex-antora-workspace',
@@ -199,6 +235,12 @@ export default class AntoraAsciidocPlugin extends Plugin {
         await this.openDiagnosticsView(diagnostics);
         new Notice(`Workspace validation finished with ${diagnostics.length} diagnostics.`);
       },
+    });
+
+    this.addCommand({
+      id: 'open-antora-page',
+      name: 'Open Antora page…',
+      callback: () => new AntoraPagePicker(this.app, this.index).open(),
     });
 
     this.addCommand({
@@ -420,10 +462,31 @@ export default class AntoraAsciidocPlugin extends Plugin {
         owning ? { component: owning.component, module: owning.module, version: owning.version } : {},
         file?.path,
       );
+
+      if (isAsciiDoc && this.settings.autoOpenPreview && !this.autoPreviewOpened) {
+        this.autoPreviewOpened = true;
+        void this.openPreviewInSideLeaf();
+      }
     };
     update();
     this.registerEvent(this.app.workspace.on('active-leaf-change', update));
     this.registerEvent(this.app.workspace.on('file-open', update));
+  }
+
+  private async openPreviewInSideLeaf(): Promise<void> {
+    // Skip when the preview pane is already open — refresh it instead.
+    const existing = this.app.workspace.getLeavesOfType(ASCIIDOC_PREVIEW_VIEW_TYPE)[0];
+    if (existing) {
+      this.app.workspace.revealLeaf(existing);
+      if (existing.view instanceof AsciiDocPreviewView) {
+        await existing.view.refreshFromActiveFile();
+      }
+      return;
+    }
+    const leaf = await this.activateView(ASCIIDOC_PREVIEW_VIEW_TYPE);
+    if (leaf.view instanceof AsciiDocPreviewView) {
+      await leaf.view.refreshFromActiveFile();
+    }
   }
 
   private async reindexWorkspace(): Promise<void> {

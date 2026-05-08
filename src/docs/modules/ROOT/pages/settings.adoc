@@ -13,6 +13,9 @@ Master toggle for the six AsciiDoc autocomplete sources (xref pages, anchors, at
 `Auto-validate on save`::
 When on, modifying an `.adoc` file triggers a debounced re-validation. Diagnostics view updates in place, replacing only the entries for the changed file.
 
+`Auto-open preview`::
+When on, opening an `.adoc` file for the first time in a session opens the preview pane in a side leaf. Subsequent file switches retarget the existing pane.
+
 == Antora workspace
 
 `Include file extensions`::

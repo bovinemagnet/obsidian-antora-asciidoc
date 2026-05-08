@@ -29,6 +29,8 @@ export interface PluginSettings {
   syncToObsidianGraph: boolean;
   /** When true, also include `include::` edges in the graph sync. */
   syncIncludeEdgesToGraph: boolean;
+  /** When true, opening an .adoc file automatically opens the AsciiDoc preview pane. */
+  autoOpenPreview: boolean;
 }
 
 export const DEFAULT_SETTINGS: PluginSettings = {
@@ -46,4 +48,5 @@ export const DEFAULT_SETTINGS: PluginSettings = {
   autoValidateDebounceMs: 750,
   syncToObsidianGraph: false,
   syncIncludeEdgesToGraph: false,
+  autoOpenPreview: false,
 };

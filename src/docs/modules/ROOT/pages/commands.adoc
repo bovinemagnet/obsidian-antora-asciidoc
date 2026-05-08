@@ -32,7 +32,10 @@ Spawns the configured Antora executable against the playbook and streams stdout/
 Opens the *Antora Explorer* sidebar showing the indexed component → version → module hierarchy. When `nav.adoc` files are present, modules display the navigation tree with click-to-open links.
 
 `Open AsciiDoc preview`::
-Opens the *AsciiDoc Preview* pane for the active `.adoc` file. The pane updates automatically when the file is modified or you switch files.
+Opens the *AsciiDoc Preview* pane for the active `.adoc` file. The pane updates automatically when the file is modified or you switch files. Also bound to a left-ribbon icon for one-click access.
+
+`Open Antora page…`::
+Fuzzy-search modal over every indexed page. Shows page IDs (`component:module:path`) rather than vault filenames, so you can jump by page name without remembering where the file lives. When multiple versions of a component are indexed, entries include the version (`component@version:module:path`).
 
 == Refactoring
 

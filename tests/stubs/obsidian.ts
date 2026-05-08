@@ -81,6 +81,15 @@ export class PluginSettingTab {}
 export class Setting {}
 export class App {}
 export class Modal {}
+export class FuzzySuggestModal<T> {
+  constructor(_app?: unknown) {
+    void this;
+  }
+  setPlaceholder(_text: string): void { /* stub */ }
+  getItems(): T[] { return []; }
+  getItemText(_item: T): string { return ''; }
+  onChooseItem(_item: T): void { /* stub */ }
+}
 export class Component {}
 
 export const MarkdownRenderer = {
