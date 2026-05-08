@@ -1,0 +1,10 @@
+{
+  "id": "obsidian-antora-asciidoc",
+  "name": "Antora AsciiDoc",
+  "version": "0.1.0",
+  "minAppVersion": "1.5.0",
+  "description": "Authoring support for Antora-based AsciiDoc documentation projects.",
+  "author": "bovinemagnet",
+  "authorUrl": "https://github.com/bovinemagnet",
+  "isDesktopOnly": true
+}
