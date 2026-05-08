@@ -18,10 +18,14 @@ export function createXrefAutocomplete(index: AntoraComponentIndex, context: Edi
 
     return {
       from: token.from,
-      options: index.listPageTargets().map((target) => ({
-        label: `xref:${target}[]`,
-        type: 'keyword',
-      })),
+      options: index.listPageTargets().map((target) => {
+        const page = index.resolveByListedTarget(target);
+        return {
+          label: `xref:${target}[]`,
+          detail: page?.title,
+          type: 'keyword',
+        };
+      }),
     };
   };
 }

@@ -1,17 +1,20 @@
 import { CompletionContext, CompletionResult } from '@codemirror/autocomplete';
 
-import { AntoraComponentIndex } from '../antora/AntoraComponentIndex';
+import { AntoraComponentIndex, collectAnchors } from '../antora/AntoraComponentIndex';
 import { AntoraPathResolver } from '../antora/AntoraPathResolver';
 import { EditorContext } from './EditorContext';
 
-const ANCHOR_PATTERN = /xref:([^#\s\]]+)#([^\s\]]*)$/;
+// Capture both `xref:foo.adoc#partial` (cross-page) and `xref:#partial`
+// (same-page). The first capture group is empty for the same-page case.
+const ANCHOR_PATTERN = /xref:([^#\s\]]*)#([^\s\]]*)$/;
 
 /**
- * Suggests anchor names after the user types `xref:foo.adoc#`. The candidate
- * set is the union of:
- *   - the resolved page's own anchors (preferred)
- *   - workspace auxiliary anchors (partials/examples) when the page can't be
- *     resolved or has no anchors of its own
+ * Suggests anchor names after `xref:…#`. Candidate sources, in order:
+ *   - same-page mode (target empty): the active document's own anchors,
+ *     extracted live from the buffer so newly-typed anchors appear without
+ *     waiting for a reindex
+ *   - cross-page mode: the resolved target page's anchors
+ *   - fallback: workspace auxiliary anchors (partials/examples)
  */
 export function createXrefAnchorAutocomplete(index: AntoraComponentIndex, context: EditorContext) {
   const resolver = new AntoraPathResolver();
@@ -35,7 +38,14 @@ export function createXrefAnchorAutocomplete(index: AntoraComponentIndex, contex
     const partial = matches[2];
     const partialStart = token.to - partial.length;
 
-    const candidates = collectCandidates(index, resolver, targetText, context);
+    let candidates: string[];
+    if (targetText === '') {
+      const documentText = completion.state.doc.toString();
+      candidates = Array.from(collectAnchors(documentText)).sort();
+    } else {
+      candidates = collectCrossPageCandidates(index, resolver, targetText, context);
+    }
+
     if (candidates.length === 0) {
       return null;
     }
@@ -47,7 +57,7 @@ export function createXrefAnchorAutocomplete(index: AntoraComponentIndex, contex
   };
 }
 
-function collectCandidates(
+function collectCrossPageCandidates(
   index: AntoraComponentIndex,
   resolver: AntoraPathResolver,
   targetText: string,

@@ -2,7 +2,7 @@ import yaml from 'js-yaml';
 
 import { AsciiDocParser } from '../asciidoc/AsciiDocParser';
 import { FileSource, SourceFile } from '../io/FileSource';
-import { AntoraComponentIndex, collectAnchors } from './AntoraComponentIndex';
+import { AntoraComponentIndex, collectAnchors, extractPageTitle } from './AntoraComponentIndex';
 import { AntoraProject, AntoraScanResult } from './AntoraProject';
 import { parseNavigation } from './NavigationParser';
 
@@ -112,6 +112,7 @@ export class AntoraWorkspaceScanner {
         path: pagePath,
         filePath: file.path,
         anchors: collectAnchors(content),
+        title: extractPageTitle(content),
       });
       // Page-level :attr-name: declarations are scoped to the page. Only the
       // *names* are remembered globally so diagnostics can recognise them;

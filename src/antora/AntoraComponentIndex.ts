@@ -9,6 +9,8 @@ export interface AntoraPageEntry {
   path: string;
   filePath: string;
   anchors: Set<string>;
+  /** First-encountered `= Title` line, used for autocomplete and hover details. */
+  title?: string;
 }
 
 export interface AntoraAssetGroup {
@@ -260,6 +262,15 @@ export class AntoraComponentIndex {
     }
   }
 
+  /**
+   * Returns the resolved page entry for a `component:module:page`-style key
+   * (matching the encoding used by `listPageTargets`). When multiple pages
+   * collide on the same key, the deterministic first match wins.
+   */
+  resolveByListedTarget(target: string): AntoraPageEntry | undefined {
+    return this.pagesByPath.get(target)?.[0];
+  }
+
   listPageTargets(): string[] {
     const targets = new Set<string>();
     for (const component of this.components.values()) {
@@ -442,6 +453,16 @@ function readDocumentIdAttributes(content: string): { idprefix?: string; idsepar
 
 function escapeForRegex(input: string): string {
   return input.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Returns the first `= Title` line in the document, trimmed. Headings inside
+ * disabled conditional blocks aren't filtered out — that level of accuracy
+ * isn't worth the complexity for a tooltip detail.
+ */
+export function extractPageTitle(content: string): string | undefined {
+  const match = content.match(/^=\s+(.+?)\s*$/m);
+  return match?.[1];
 }
 
 /**

@@ -54,6 +54,38 @@
   margin-left: 0.4rem;
 }
 
+.antora-explorer-pane {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.antora-explorer-filter {
+  padding: 0.4rem;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.antora-explorer-filter-input {
+  width: 100%;
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  background: var(--background-primary);
+  color: var(--text-normal);
+}
+
+.antora-explorer-tree {
+  overflow: auto;
+  flex: 1;
+  padding: 0.4rem;
+}
+
+.antora-explorer-empty {
+  color: var(--text-muted);
+  padding: 0.6rem;
+  font-style: italic;
+}
+
 .antora-preview-pane {
   padding: 1rem;
   overflow: auto;
@@ -257,6 +289,41 @@
 .antora-status-bar {
   color: var(--text-muted);
   font-size: 0.85em;
+}
+
+.antora-heading {
+  font-weight: 600;
+}
+
+.antora-heading-1 {
+  font-size: 1.6em;
+  line-height: 1.2;
+}
+
+.antora-heading-2 {
+  font-size: 1.4em;
+  line-height: 1.25;
+}
+
+.antora-heading-3 {
+  font-size: 1.2em;
+  line-height: 1.3;
+}
+
+.antora-heading-4 {
+  font-size: 1.1em;
+}
+
+.antora-heading-5,
+.antora-heading-6 {
+  font-size: 1em;
+  font-weight: 500;
+}
+
+.antora-heading-marker {
+  color: var(--text-muted);
+  opacity: 0.5;
+  margin-right: 0.2em;
 }
 
 .antora-image-missing {

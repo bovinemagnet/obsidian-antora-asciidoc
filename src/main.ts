@@ -24,6 +24,7 @@ import { createImageAutocomplete } from './editor/ImageAutocomplete';
 import { createImageHoverProvider } from './editor/ImageHoverProvider';
 import { createIncludeAutocomplete } from './editor/IncludeAutocomplete';
 import { createSectionFolding } from './editor/SectionFolding';
+import { createSourceHeadingDecoration } from './editor/SourceHeadingDecoration';
 import { createXrefAnchorAutocomplete } from './editor/XrefAnchorAutocomplete';
 import { createXrefAutocomplete } from './editor/XrefAutocomplete';
 import { createXrefHoverProvider } from './editor/XrefHoverProvider';
@@ -167,6 +168,7 @@ export default class AntoraAsciidocPlugin extends Plugin {
     this.editorExtensions.push(createImageHoverProvider(this.index, this.app.vault, this.editorContext));
     this.editorExtensions.push(createXrefNavigation(this.editorContext, async (target) => this.openXrefTarget(target)));
     this.editorExtensions.push(createSectionFolding(this.editorContext));
+    this.editorExtensions.push(createSourceHeadingDecoration(this.editorContext));
     if (this.settings.diagnosticsEnabled) {
       this.editorExtensions.push(createDiagnosticsExtension(this.index, this.editorContext));
     }
