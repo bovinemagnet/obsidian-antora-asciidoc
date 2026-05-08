@@ -11,6 +11,8 @@ import { AntoraWorkspaceScanner } from './antora/AntoraWorkspaceScanner';
 import { parsePlaybooks } from './antora/PlaybookParser';
 import { AsciiDocParser } from './asciidoc/AsciiDocParser';
 import { AsciiDocPreviewRenderer } from './asciidoc/AsciiDocPreviewRenderer';
+import { demoteHeading, generateAnchorId, promoteHeading } from './asciidoc/HeadingTransforms';
+import { convertMarkdownToAsciiDoc } from './asciidoc/MarkdownToAsciiDoc';
 import { buildPageTemplate, buildPartialTemplate } from './asciidoc/Templates';
 import { asciiDocLanguageSupport } from './editor/AsciiDocLanguageSupport';
 import { createAttributeAutocomplete } from './editor/AttributeAutocomplete';
@@ -272,6 +274,12 @@ export default class AntoraAsciidocPlugin extends Plugin {
     });
 
     this.addCommand({
+      id: 'move-current-page',
+      name: 'Move current page to another module',
+      callback: async () => this.openMovePagePrompt(),
+    });
+
+    this.addCommand({
       id: 'find-references-to-current-page',
       name: 'Find references to current page',
       callback: async () => this.findReferencesToCurrentPage(),
@@ -309,6 +317,52 @@ export default class AntoraAsciidocPlugin extends Plugin {
       id: 'insert-page-template',
       name: 'Insert page template at cursor',
       callback: () => this.insertTemplate(buildPageTemplate()),
+    });
+
+    this.addCommand({
+      id: 'promote-heading',
+      name: 'Promote heading (one level shallower)',
+      editorCallback: (editor) => this.transformActiveLine(editor, promoteHeading),
+    });
+
+    this.addCommand({
+      id: 'demote-heading',
+      name: 'Demote heading (one level deeper)',
+      editorCallback: (editor) => this.transformActiveLine(editor, demoteHeading),
+    });
+
+    this.addCommand({
+      id: 'convert-markdown-selection-to-asciidoc',
+      name: 'Convert Markdown selection to AsciiDoc',
+      editorCallback: (editor) => {
+        const selection = editor.getSelection();
+        if (!selection) {
+          new Notice('Select some Markdown first.');
+          return;
+        }
+        editor.replaceSelection(convertMarkdownToAsciiDoc(selection));
+      },
+    });
+
+    this.addCommand({
+      id: 'wrap-selection-as-anchor',
+      name: 'Wrap selection as anchor',
+      editorCallback: (editor) => {
+        const selection = editor.getSelection();
+        const sourceText = selection || editor.getLine(editor.getCursor().line).trim();
+        const id = generateAnchorId(sourceText);
+        if (!id) {
+          new Notice('Could not derive an anchor ID from the selection.');
+          return;
+        }
+        const declaration = `[[${id}]]`;
+        if (selection) {
+          editor.replaceSelection(`${declaration}${selection}`);
+        } else {
+          // No selection — insert the anchor on its own at cursor position.
+          editor.replaceRange(`${declaration}\n`, editor.getCursor());
+        }
+      },
     });
 
     this.addCommand({
@@ -579,6 +633,24 @@ export default class AntoraAsciidocPlugin extends Plugin {
     editor.replaceSelection(template);
   }
 
+  /**
+   * Replaces the cursor's line with the result of the supplied transform.
+   * Used by promote/demote heading commands.
+   */
+  private transformActiveLine(editor: import('obsidian').Editor, transform: (line: string) => string): void {
+    const cursor = editor.getCursor();
+    const lineText = editor.getLine(cursor.line);
+    const next = transform(lineText);
+    if (next === lineText) {
+      return;
+    }
+    editor.replaceRange(
+      next,
+      { line: cursor.line, ch: 0 },
+      { line: cursor.line, ch: lineText.length },
+    );
+  }
+
   private async exportDiagnostics(format: ExportFormat): Promise<void> {
     const view = this.getDiagnosticsView();
     const diagnostics = view ? view.getAllDiagnostics() : [];
@@ -660,6 +732,72 @@ export default class AntoraAsciidocPlugin extends Plugin {
         } catch (error) {
           this.logger.error('Page rename failed', error);
           new Notice(`Rename failed: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      },
+    }).open();
+  }
+
+  private async openMovePagePrompt(): Promise<void> {
+    const file = this.app.workspace.getActiveFile();
+    if (!(file instanceof TFile) || !isAsciiDocPath(file.path)) {
+      new Notice('Open an .adoc or .asciidoc file first.');
+      return;
+    }
+    const pageEntry = this.index.getPageByFilePath(file.path);
+    if (!pageEntry) {
+      new Notice('Active file is not part of any indexed Antora component.');
+      return;
+    }
+    const moduleNames = this.index.getModulesFor(pageEntry.component);
+    if (moduleNames.length <= 1) {
+      new Notice(`Component '${pageEntry.component}' has only one module — nowhere to move to.`);
+      return;
+    }
+
+    new RenameModal(this.app, {
+      title: `Move ${pageEntry.path}`,
+      description: `Currently in ${pageEntry.component}:${pageEntry.module}`,
+      initialValue: pageEntry.path,
+      dropdown: {
+        label: 'Target module',
+        description: `Move the page into a different module of ${pageEntry.component}.`,
+        options: moduleNames,
+        initialValue: pageEntry.module,
+      },
+      onPreview: async (value, _toggleValue, targetModule) => {
+        if (!value || !targetModule) {
+          return 0;
+        }
+        if (value === pageEntry.path && targetModule === pageEntry.module) {
+          return 0;
+        }
+        const plan = await this.refactorService.planPageRename({
+          oldFilePath: pageEntry.filePath,
+          newPagePath: value,
+          newModule: targetModule,
+        });
+        return plan.edits.length;
+      },
+      onSubmit: async (value, _toggleValue, targetModule) => {
+        if (!value || !targetModule) {
+          new Notice('Move cancelled (incomplete inputs).');
+          return;
+        }
+        if (value === pageEntry.path && targetModule === pageEntry.module) {
+          new Notice('Move cancelled (no change).');
+          return;
+        }
+        try {
+          const plan = await this.refactorService.planPageRename({
+            oldFilePath: pageEntry.filePath,
+            newPagePath: value,
+            newModule: targetModule,
+          });
+          await this.applyRefactorPlan(plan);
+          new Notice(`Moved to ${targetModule}/${value}. Updated ${plan.edits.length} reference(s).`);
+        } catch (error) {
+          this.logger.error('Page move failed', error);
+          new Notice(`Move failed: ${error instanceof Error ? error.message : String(error)}`);
         }
       },
     }).open();

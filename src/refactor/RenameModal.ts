@@ -6,9 +6,11 @@ export interface RenamePromptOptions {
   description?: string;
   /** Optional checkbox shown above the text input. */
   toggle?: { label: string; description?: string; initialValue?: boolean };
+  /** Optional dropdown shown above the text input. */
+  dropdown?: { label: string; description?: string; options: string[]; initialValue?: string };
   /** Async preview hook called whenever the user clicks Preview; returns a count. */
-  onPreview?: (value: string, toggleValue: boolean) => Promise<number>;
-  onSubmit: (value: string, toggleValue: boolean) => Promise<void> | void;
+  onPreview?: (value: string, toggleValue: boolean, dropdownValue?: string) => Promise<number>;
+  onSubmit: (value: string, toggleValue: boolean, dropdownValue?: string) => Promise<void> | void;
 }
 
 /**
@@ -19,11 +21,13 @@ export interface RenamePromptOptions {
 export class RenameModal extends Modal {
   private value: string;
   private toggleValue: boolean;
+  private dropdownValue: string | undefined;
 
   constructor(app: App, private readonly options: RenamePromptOptions) {
     super(app);
     this.value = options.initialValue;
     this.toggleValue = options.toggle?.initialValue === true;
+    this.dropdownValue = options.dropdown?.initialValue ?? options.dropdown?.options[0];
   }
 
   onOpen(): void {
@@ -46,6 +50,25 @@ export class RenameModal extends Modal {
           this.toggleValue = v;
           previewEl.empty();
         }));
+    }
+
+    if (this.options.dropdown) {
+      const dropdownConfig = this.options.dropdown;
+      new Setting(contentEl)
+        .setName(dropdownConfig.label)
+        .setDesc(dropdownConfig.description ?? '')
+        .addDropdown((d) => {
+          for (const option of dropdownConfig.options) {
+            d.addOption(option, option);
+          }
+          if (this.dropdownValue) {
+            d.setValue(this.dropdownValue);
+          }
+          d.onChange((v) => {
+            this.dropdownValue = v;
+            previewEl.empty();
+          });
+        });
     }
 
     new Setting(contentEl)
@@ -72,7 +95,7 @@ export class RenameModal extends Modal {
             }
             previewEl.empty();
             try {
-              const count = await onPreview(this.value, this.toggleValue);
+              const count = await onPreview(this.value, this.toggleValue, this.dropdownValue);
               previewEl.createEl('p', { text: `${count} reference(s) will be updated.` });
             } catch (error) {
               previewEl.createEl('p', {
@@ -86,7 +109,7 @@ export class RenameModal extends Modal {
       .addButton((button) => {
         button.setButtonText('Apply').setCta().onClick(async () => {
           this.close();
-          await this.options.onSubmit(this.value, this.toggleValue);
+          await this.options.onSubmit(this.value, this.toggleValue, this.dropdownValue);
         });
       })
       .addButton((button) => button.setButtonText('Cancel').onClick(() => this.close()));

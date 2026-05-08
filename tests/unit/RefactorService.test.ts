@@ -175,6 +175,72 @@ describe('RefactorService - planAnchorRename', () => {
   });
 });
 
+describe('RefactorService - page move across modules', () => {
+  it('moves the file into the target module folder', async () => {
+    await setupWorkspace({
+      'docs/modules/ROOT/pages/about.adoc': '= About',
+      'docs/modules/api/pages/.keep': '',
+    });
+    const plan = await service.planPageRename({
+      oldFilePath: 'docs/modules/ROOT/pages/about.adoc',
+      newPagePath: 'about.adoc',
+      newModule: 'api',
+    });
+    expect(plan.fileMove).toEqual({
+      from: 'docs/modules/ROOT/pages/about.adoc',
+      to: 'docs/modules/api/pages/about.adoc',
+    });
+  });
+
+  it('widens bare xrefs from the old module to the module:page form after move', async () => {
+    await setupWorkspace({
+      'docs/modules/ROOT/pages/about.adoc': '= About',
+      'docs/modules/ROOT/pages/index.adoc': 'See xref:about.adoc[].',
+    });
+    const plan = await service.planPageRename({
+      oldFilePath: 'docs/modules/ROOT/pages/about.adoc',
+      newPagePath: 'about.adoc',
+      newModule: 'api',
+    });
+    const indexContent = plan.fileChanges.get('docs/modules/ROOT/pages/index.adoc');
+    expect(indexContent).toContain('xref:api:about.adoc[]');
+    expect(indexContent).not.toContain('xref:about.adoc[]');
+  });
+
+  it('keeps existing module:page xrefs scoped against the new module', async () => {
+    await setupWorkspace({
+      'docs/modules/ROOT/pages/about.adoc': '= About',
+      'docs/modules/ROOT/pages/index.adoc': 'See xref:ROOT:about.adoc[].',
+    });
+    const plan = await service.planPageRename({
+      oldFilePath: 'docs/modules/ROOT/pages/about.adoc',
+      newPagePath: 'about.adoc',
+      newModule: 'api',
+    });
+    expect(plan.fileChanges.get('docs/modules/ROOT/pages/index.adoc'))
+      .toContain('xref:api:about.adoc[]');
+  });
+
+  it('rewrites bare xrefs in the moved page itself when needed', async () => {
+    await setupWorkspace({
+      'docs/modules/ROOT/pages/about.adoc': '= About',
+      'docs/modules/ROOT/pages/contact.adoc': '= Contact',
+      'docs/modules/api/pages/.keep': '',
+      // The contact page references about.adoc with bare scope.
+    });
+    // Move contact.adoc into the api module.
+    const plan = await service.planPageRename({
+      oldFilePath: 'docs/modules/ROOT/pages/contact.adoc',
+      newPagePath: 'contact.adoc',
+      newModule: 'api',
+    });
+    // contact.adoc itself doesn't reference anything, so no edits expected
+    // beyond the file move.
+    expect(plan.fileMove?.to).toBe('docs/modules/api/pages/contact.adoc');
+    expect(plan.fileChanges.size).toBe(0);
+  });
+});
+
 describe('RefactorService - cross-page anchor rename', () => {
   it('rewrites declarations on every page when acrossAllPages is true', async () => {
     await setupWorkspace({

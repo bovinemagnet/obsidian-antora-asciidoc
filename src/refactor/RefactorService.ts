@@ -27,6 +27,12 @@ export interface PageRenameOptions {
   oldFilePath: string;
   /** New `<path>.adoc` portion under the same module's pages/ folder. */
   newPagePath: string;
+  /**
+   * When set, the page also moves into a different module within the same
+   * component. xrefs to the page get rewritten with the new module scope so
+   * they keep resolving.
+   */
+  newModule?: string;
 }
 
 export interface AnchorRenameOptions {
@@ -81,7 +87,7 @@ export class RefactorService {
           line: xref.line,
           column: xref.column,
           originalText: xref.target,
-          replacementText: rewritePageTarget(xref.target, pageEntry, sourcePage),
+          replacementText: rewritePageTarget(xref.target, pageEntry, defaults),
         });
       }
     }
@@ -137,10 +143,12 @@ export class RefactorService {
     if (!owner) {
       throw new Error(`Page is not indexed: ${options.oldFilePath}`);
     }
+    const newModule = options.newModule ?? owner.module;
     const newOwner: AntoraPageEntry = {
       ...owner,
+      module: newModule,
       path: options.newPagePath,
-      filePath: rewriteFilePath(owner.filePath, owner.path, options.newPagePath),
+      filePath: rewriteFilePath(owner.filePath, owner.module, owner.path, newModule, options.newPagePath),
     };
 
     const plan: RefactorPlan = {
@@ -166,7 +174,7 @@ export class RefactorService {
         if (!targetPage || targetPage.filePath !== owner.filePath) {
           continue;
         }
-        const newTarget = rewritePageTarget(xref.target, newOwner, sourcePage);
+        const newTarget = rewritePageTarget(xref.target, newOwner, defaults);
         if (newTarget === xref.target) {
           continue;
         }
@@ -296,32 +304,41 @@ export class RefactorService {
 }
 
 /**
- * Builds a target string for the renamed page that preserves the original
- * scoping (bare / module / component:module) the writer chose.
+ * Builds a target string for the renamed page. Tries to preserve the writer's
+ * original scope (bare / module / component:module) when that scope is still
+ * sufficient for the move; widens the scope when the page has moved to a
+ * module the source can no longer resolve via defaults.
  */
 function rewritePageTarget(
   originalTarget: string,
   newOwner: AntoraPageEntry,
-  sourcePage: AntoraPageEntry | undefined,
+  sourceDefaults: { component?: string; module?: string },
 ): string {
   const [pathPart, anchor] = originalTarget.split('#');
   const segments = pathPart.split(':');
   const anchorSuffix = anchor !== undefined ? `#${anchor}` : '';
 
+  // Bare page reference works only when the new page is in the source's own module.
   if (segments.length === 1) {
-    // Bare page reference. Keep bare; resolution defaults will cover it.
-    return `${newOwner.path}${anchorSuffix}`;
+    if (sourceDefaults.module === newOwner.module && sourceDefaults.component === newOwner.component) {
+      return `${newOwner.path}${anchorSuffix}`;
+    }
+    // Source can't resolve a bare reference to the new location — widen.
+    if (sourceDefaults.component === newOwner.component) {
+      return `${newOwner.module}:${newOwner.path}${anchorSuffix}`;
+    }
+    return `${newOwner.component}:${newOwner.module}:${newOwner.path}${anchorSuffix}`;
   }
+
+  // module:page form works only when source is in the same component.
   if (segments.length === 2) {
-    // module:page form. Preserve module from the new owner so cross-module
-    // links keep pointing at the right place even if the writer used the
-    // module qualifier deliberately.
-    const moduleName = sourcePage && sourcePage.module === newOwner.module
-      ? newOwner.module
-      : newOwner.module;
-    return `${moduleName}:${newOwner.path}${anchorSuffix}`;
+    if (sourceDefaults.component === newOwner.component) {
+      return `${newOwner.module}:${newOwner.path}${anchorSuffix}`;
+    }
+    return `${newOwner.component}:${newOwner.module}:${newOwner.path}${anchorSuffix}`;
   }
-  // component:module:page
+
+  // component:module:page is always sufficient.
   return `${newOwner.component}:${newOwner.module}:${newOwner.path}${anchorSuffix}`;
 }
 
@@ -351,19 +368,35 @@ function rewriteAnchorDeclarations(content: string, oldAnchor: string, newAnchor
 }
 
 /**
- * Computes the new file path when only the page-relative portion changes.
- * Works whether the original page is at the root of `pages/` or inside
- * subdirectories.
+ * Computes the new file path. Handles two changes simultaneously:
+ *   - module change: swaps `/modules/<oldModule>/pages/` for the new module
+ *   - page-relative path change: swaps the trailing path segment
  */
-function rewriteFilePath(originalFilePath: string, oldPagePath: string, newPagePath: string): string {
-  if (!originalFilePath.endsWith(oldPagePath)) {
-    // Defensive: if the old path doesn't actually appear at the tail (which
-    // would mean the index entry is stale), fall back to swapping the
-    // filename only.
-    const lastSlash = originalFilePath.lastIndexOf('/');
-    return `${originalFilePath.slice(0, lastSlash + 1)}${newPagePath.split('/').pop()}`;
+function rewriteFilePath(
+  originalFilePath: string,
+  oldModule: string,
+  oldPagePath: string,
+  newModule: string,
+  newPagePath: string,
+): string {
+  let result = originalFilePath;
+
+  if (oldModule !== newModule) {
+    const oldSegment = `/modules/${oldModule}/`;
+    const newSegment = `/modules/${newModule}/`;
+    const idx = result.indexOf(oldSegment);
+    if (idx !== -1) {
+      result = result.slice(0, idx) + newSegment + result.slice(idx + oldSegment.length);
+    }
   }
-  return `${originalFilePath.slice(0, originalFilePath.length - oldPagePath.length)}${newPagePath}`;
+
+  if (result.endsWith(oldPagePath)) {
+    return result.slice(0, result.length - oldPagePath.length) + newPagePath;
+  }
+  // Fallback: swap just the filename portion when the tail doesn't match
+  // (would indicate a stale index entry).
+  const lastSlash = result.lastIndexOf('/');
+  return `${result.slice(0, lastSlash + 1)}${newPagePath.split('/').pop()}`;
 }
 
 /**

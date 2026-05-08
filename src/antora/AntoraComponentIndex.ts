@@ -292,6 +292,21 @@ export class AntoraComponentIndex {
     return [...this.components.values()];
   }
 
+  /** Names of every module declared under the given component, sorted. */
+  getModulesFor(componentName: string): string[] {
+    const component = this.components.get(componentName);
+    if (!component) {
+      return [];
+    }
+    const names = new Set<string>();
+    for (const version of component.versions.values()) {
+      for (const module of version.modules.keys()) {
+        names.add(module);
+      }
+    }
+    return [...names].sort();
+  }
+
   resolvePage(target: { component?: string; module?: string; version?: string; page: string }): AntoraPageEntry | undefined {
     const candidates = this.pagesByPath.get(this.normalizedPageTarget(target.component, target.module, target.page));
     if (!candidates || candidates.length === 0) {
