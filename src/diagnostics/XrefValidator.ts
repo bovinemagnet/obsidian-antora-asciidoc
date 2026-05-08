@@ -39,11 +39,11 @@ export class XrefValidator {
     });
   }
 
-  private deriveDefaultsFor(filePath: string): { component?: string; module?: string } {
+  private deriveDefaultsFor(filePath: string): { component?: string; module?: string; version?: string } {
     const owning = this.index.getPageByFilePath(filePath);
     if (!owning) {
       return {};
     }
-    return { component: owning.component, module: owning.module };
+    return { component: owning.component, module: owning.module, version: owning.version };
   }
 }

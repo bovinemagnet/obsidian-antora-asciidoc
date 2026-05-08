@@ -181,3 +181,87 @@
   color: var(--text-muted);
   word-break: break-all;
 }
+
+.antora-diagnostics-pane {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 0.4rem 0.6rem;
+}
+
+.antora-diagnostics-toolbar {
+  display: flex;
+  gap: 0.3rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.5rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.antora-diagnostics-chip {
+  text-transform: uppercase;
+  font-size: 0.75em;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid var(--background-modifier-border);
+  background: transparent;
+  cursor: pointer;
+  opacity: 0.55;
+}
+
+.antora-diagnostics-chip.is-active {
+  opacity: 1;
+}
+
+.antora-diagnostics-chip-error {
+  color: var(--text-error);
+}
+
+.antora-diagnostics-chip-warning {
+  color: var(--text-warning);
+}
+
+.antora-diagnostics-chip-info {
+  color: var(--text-accent);
+}
+
+.antora-diagnostics-copy {
+  margin-left: auto;
+  font-size: 0.75em;
+}
+
+.antora-diagnostics-list {
+  list-style: none;
+  padding-left: 0;
+  margin: 0;
+  overflow: auto;
+}
+
+.antora-diagnostic {
+  padding: 0.25rem 0;
+  border-bottom: 1px dashed var(--background-modifier-border);
+}
+
+.antora-diagnostic-error a {
+  color: var(--text-error);
+}
+
+.antora-diagnostic-warning a {
+  color: var(--text-warning);
+}
+
+.antora-diagnostic-info a {
+  color: var(--text-accent);
+}
+
+.antora-image-missing {
+  display: inline-block;
+  padding: 0.6rem 1rem;
+  margin: 0.4rem 0;
+  background: var(--background-secondary);
+  border: 1px dashed var(--background-modifier-border);
+  border-radius: 4px;
+  color: var(--text-muted);
+  font-style: italic;
+  font-size: 0.85em;
+}

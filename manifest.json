@@ -6,5 +6,6 @@
   "description": "Authoring support for Antora-based AsciiDoc documentation projects: xref autocomplete and validation, attribute and image hover, live preview with Mermaid and tabs, page/anchor refactoring, Antora build runner, Vale lint integration.",
   "author": "bovinemagnet",
   "authorUrl": "https://github.com/bovinemagnet",
+  "fundingUrl": "https://github.com/bovinemagnet/obsidian-antora-asciidoc",
   "isDesktopOnly": true
 }

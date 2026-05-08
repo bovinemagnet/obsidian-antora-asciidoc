@@ -1,11 +1,14 @@
-import { ItemView, MarkdownView, TFile } from 'obsidian';
+import { ItemView, MarkdownView, Notice, TFile } from 'obsidian';
 
-import { Diagnostic } from '../diagnostics/Diagnostic';
+import { Diagnostic, DiagnosticSeverity } from '../diagnostics/Diagnostic';
 
 export const DIAGNOSTICS_VIEW_TYPE = 'antora-diagnostics';
 
+const ALL_SEVERITIES: DiagnosticSeverity[] = ['error', 'warning', 'info'];
+
 export class DiagnosticsView extends ItemView {
   private diagnostics: Diagnostic[] = [];
+  private enabledSeverities: Set<DiagnosticSeverity> = new Set(ALL_SEVERITIES);
 
   getViewType(): string {
     return DIAGNOSTICS_VIEW_TYPE;
@@ -41,18 +44,55 @@ export class DiagnosticsView extends ItemView {
     return this.diagnostics.filter((diagnostic) => diagnostic.filePath === filePath);
   }
 
+  getAllDiagnostics(): Diagnostic[] {
+    return [...this.diagnostics];
+  }
+
+  private filtered(): Diagnostic[] {
+    return this.diagnostics.filter((d) => this.enabledSeverities.has(d.severity));
+  }
+
+  private toggleSeverity(severity: DiagnosticSeverity): void {
+    if (this.enabledSeverities.has(severity)) {
+      this.enabledSeverities.delete(severity);
+    } else {
+      this.enabledSeverities.add(severity);
+    }
+    this.render();
+  }
+
+  private async copyToClipboard(): Promise<void> {
+    const text = this.filtered()
+      .map((d) => `${d.severity.toUpperCase()} ${d.filePath}:${d.line}:${d.column} — ${d.message}`)
+      .join('\n');
+    if (!text) {
+      new Notice('Nothing to copy.');
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+      new Notice('Diagnostics copied to clipboard.');
+    } catch {
+      new Notice('Clipboard write failed.');
+    }
+  }
+
   private render(): void {
     const { contentEl } = this;
     contentEl.empty();
+    contentEl.addClass('antora-diagnostics-pane');
 
-    if (this.diagnostics.length === 0) {
-      contentEl.createEl('p', { text: 'No diagnostics.' });
+    this.renderToolbar(contentEl);
+
+    const visible = this.filtered();
+    if (visible.length === 0) {
+      contentEl.createEl('p', { text: this.diagnostics.length === 0 ? 'No diagnostics.' : 'No diagnostics match the active filter.' });
       return;
     }
 
-    const list = contentEl.createEl('ul');
-    for (const diagnostic of this.diagnostics) {
-      const item = list.createEl('li');
+    const list = contentEl.createEl('ul', { cls: 'antora-diagnostics-list' });
+    for (const diagnostic of visible) {
+      const item = list.createEl('li', { cls: `antora-diagnostic antora-diagnostic-${diagnostic.severity}` });
       const link = item.createEl('a', {
         text: `${diagnostic.severity.toUpperCase()} ${diagnostic.filePath}:${diagnostic.line}:${diagnostic.column} — ${diagnostic.message}`,
       });
@@ -68,5 +108,20 @@ export class DiagnosticsView extends ItemView {
         }
       };
     }
+  }
+
+  private renderToolbar(parent: HTMLElement): void {
+    const bar = parent.createDiv({ cls: 'antora-diagnostics-toolbar' });
+    for (const severity of ALL_SEVERITIES) {
+      const count = this.diagnostics.filter((d) => d.severity === severity).length;
+      const enabled = this.enabledSeverities.has(severity);
+      const chip = bar.createEl('button', {
+        text: `${severity} (${count})`,
+        cls: `antora-diagnostics-chip antora-diagnostics-chip-${severity}${enabled ? ' is-active' : ''}`,
+      });
+      chip.onclick = () => this.toggleSeverity(severity);
+    }
+    const copy = bar.createEl('button', { text: 'Copy', cls: 'antora-diagnostics-copy' });
+    copy.onclick = () => void this.copyToClipboard();
   }
 }

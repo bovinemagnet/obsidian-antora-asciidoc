@@ -54,8 +54,28 @@ describe('AntoraPathResolver', () => {
     expect(resolver.resolveXrefTarget('other:mod:foo.adoc', { component: 'docs', module: 'ROOT' })).toEqual({
       component: 'other',
       module: 'mod',
+      version: undefined,
       page: 'foo.adoc',
       anchor: undefined,
     });
+  });
+
+  it('parses leading version@ prefix', () => {
+    expect(resolver.resolveXrefTarget('2.0@docs:ROOT:foo.adoc')).toMatchObject({
+      version: '2.0',
+      component: 'docs',
+      module: 'ROOT',
+      page: 'foo.adoc',
+    });
+  });
+
+  it('inherits version from defaults when not explicit', () => {
+    expect(resolver.resolveXrefTarget('foo.adoc', { component: 'docs', module: 'ROOT', version: '1.0' })).toMatchObject({
+      version: '1.0',
+    });
+  });
+
+  it('explicit version@ wins over default version', () => {
+    expect(resolver.resolveXrefTarget('3.0@foo.adoc', { version: '1.0' })).toMatchObject({ version: '3.0' });
   });
 });

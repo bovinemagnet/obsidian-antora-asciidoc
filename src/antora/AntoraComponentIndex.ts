@@ -281,9 +281,22 @@ export class AntoraComponentIndex {
     return [...this.components.values()];
   }
 
-  resolvePage(target: { component?: string; module?: string; page: string }): AntoraPageEntry | undefined {
-    const resolved = this.pagesByPath.get(this.normalizedPageTarget(target.component, target.module, target.page));
-    return resolved?.[0];
+  resolvePage(target: { component?: string; module?: string; version?: string; page: string }): AntoraPageEntry | undefined {
+    const candidates = this.pagesByPath.get(this.normalizedPageTarget(target.component, target.module, target.page));
+    if (!candidates || candidates.length === 0) {
+      return undefined;
+    }
+    // Explicit version → exact match required.
+    if (target.version) {
+      return candidates.find((entry) => entry.version === target.version);
+    }
+    // Single candidate → no choice to make.
+    if (candidates.length === 1) {
+      return candidates[0];
+    }
+    // Multiple versions exist for the same target. Pick the highest version
+    // by the conventional Antora ordering (numeric where possible, lexicographic otherwise).
+    return [...candidates].sort(compareVersionsDescending)[0];
   }
 
   private normalizedPageTarget(componentName: string | undefined, moduleName: string | undefined, path: string): string {
@@ -429,4 +442,39 @@ function readDocumentIdAttributes(content: string): { idprefix?: string; idsepar
 
 function escapeForRegex(input: string): string {
   return input.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Compares two version strings for "highest first" sorting. Numeric segments
+ * sort numerically (so 10.0 > 2.0); strings sort lexicographically.
+ * `master`/`HEAD` (snapshot conventions) are treated as the highest possible
+ * version so they win against any tagged version.
+ */
+export function compareVersionsDescending(a: AntoraPageEntry, b: AntoraPageEntry): number {
+  return compareVersionStrings(b.version, a.version);
+}
+
+const SNAPSHOT_VERSIONS = new Set(['master', 'main', 'head', 'snapshot']);
+
+function compareVersionStrings(a: string, b: string): number {
+  if (a === b) return 0;
+  const aSnap = SNAPSHOT_VERSIONS.has(a.toLowerCase());
+  const bSnap = SNAPSHOT_VERSIONS.has(b.toLowerCase());
+  if (aSnap && !bSnap) return 1;
+  if (!aSnap && bSnap) return -1;
+
+  const aParts = a.split(/[.\-_]/);
+  const bParts = b.split(/[.\-_]/);
+  for (let i = 0; i < Math.max(aParts.length, bParts.length); i += 1) {
+    const aPart = aParts[i] ?? '';
+    const bPart = bParts[i] ?? '';
+    const aNum = Number(aPart);
+    const bNum = Number(bPart);
+    if (Number.isFinite(aNum) && Number.isFinite(bNum)) {
+      if (aNum !== bNum) return aNum - bNum;
+    } else if (aPart !== bPart) {
+      return aPart < bPart ? -1 : 1;
+    }
+  }
+  return 0;
 }

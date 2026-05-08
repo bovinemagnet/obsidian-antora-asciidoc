@@ -4,9 +4,11 @@ export interface RenamePromptOptions {
   title: string;
   initialValue: string;
   description?: string;
+  /** Optional checkbox shown above the text input. */
+  toggle?: { label: string; description?: string; initialValue?: boolean };
   /** Async preview hook called whenever the user clicks Preview; returns a count. */
-  onPreview?: (value: string) => Promise<number>;
-  onSubmit: (value: string) => Promise<void> | void;
+  onPreview?: (value: string, toggleValue: boolean) => Promise<number>;
+  onSubmit: (value: string, toggleValue: boolean) => Promise<void> | void;
 }
 
 /**
@@ -16,10 +18,12 @@ export interface RenamePromptOptions {
  */
 export class RenameModal extends Modal {
   private value: string;
+  private toggleValue: boolean;
 
   constructor(app: App, private readonly options: RenamePromptOptions) {
     super(app);
     this.value = options.initialValue;
+    this.toggleValue = options.toggle?.initialValue === true;
   }
 
   onOpen(): void {
@@ -32,6 +36,17 @@ export class RenameModal extends Modal {
     }
 
     const previewEl = contentEl.createDiv({ cls: 'antora-rename-modal-preview' });
+
+    if (this.options.toggle) {
+      const toggleConfig = this.options.toggle;
+      new Setting(contentEl)
+        .setName(toggleConfig.label)
+        .setDesc(toggleConfig.description ?? '')
+        .addToggle((t) => t.setValue(this.toggleValue).onChange((v) => {
+          this.toggleValue = v;
+          previewEl.empty();
+        }));
+    }
 
     new Setting(contentEl)
       .setName('New name')
@@ -57,7 +72,7 @@ export class RenameModal extends Modal {
             }
             previewEl.empty();
             try {
-              const count = await onPreview(this.value);
+              const count = await onPreview(this.value, this.toggleValue);
               previewEl.createEl('p', { text: `${count} reference(s) will be updated.` });
             } catch (error) {
               previewEl.createEl('p', {
@@ -71,7 +86,7 @@ export class RenameModal extends Modal {
       .addButton((button) => {
         button.setButtonText('Apply').setCta().onClick(async () => {
           this.close();
-          await this.options.onSubmit(this.value);
+          await this.options.onSubmit(this.value, this.toggleValue);
         });
       })
       .addButton((button) => button.setButtonText('Cancel').onClick(() => this.close()));

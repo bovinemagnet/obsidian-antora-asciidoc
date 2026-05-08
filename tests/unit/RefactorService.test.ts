@@ -175,6 +175,47 @@ describe('RefactorService - planAnchorRename', () => {
   });
 });
 
+describe('RefactorService - cross-page anchor rename', () => {
+  it('rewrites declarations on every page when acrossAllPages is true', async () => {
+    await setupWorkspace({
+      'docs/modules/ROOT/pages/about.adoc': '[[shared]]\n= About',
+      'docs/modules/ROOT/pages/contact.adoc': '[[shared]]\n= Contact',
+      'docs/modules/ROOT/pages/index.adoc': 'See xref:about.adoc#shared[].\nAlso xref:contact.adoc#shared[].',
+    });
+
+    const plan = await service.planAnchorRename({
+      ownerFilePath: 'docs/modules/ROOT/pages/about.adoc',
+      oldAnchor: 'shared',
+      newAnchor: 'renamed',
+      acrossAllPages: true,
+    });
+
+    const about = plan.fileChanges.get('docs/modules/ROOT/pages/about.adoc');
+    const contact = plan.fileChanges.get('docs/modules/ROOT/pages/contact.adoc');
+    const index = plan.fileChanges.get('docs/modules/ROOT/pages/index.adoc');
+    expect(about).toContain('[[renamed]]');
+    expect(contact).toContain('[[renamed]]');
+    expect(index).toContain('xref:about.adoc#renamed[]');
+    expect(index).toContain('xref:contact.adoc#renamed[]');
+  });
+
+  it('default mode still scopes to the owning page', async () => {
+    await setupWorkspace({
+      'docs/modules/ROOT/pages/about.adoc': '[[shared]]\n= About',
+      'docs/modules/ROOT/pages/contact.adoc': '[[shared]]\n= Contact',
+    });
+
+    const plan = await service.planAnchorRename({
+      ownerFilePath: 'docs/modules/ROOT/pages/about.adoc',
+      oldAnchor: 'shared',
+      newAnchor: 'renamed',
+    });
+
+    expect(plan.fileChanges.get('docs/modules/ROOT/pages/about.adoc')).toContain('[[renamed]]');
+    expect(plan.fileChanges.has('docs/modules/ROOT/pages/contact.adoc')).toBe(false);
+  });
+});
+
 describe('RefactorService - nav.adoc references', () => {
   it('rewrites xrefs inside nav.adoc when the referenced page is renamed', async () => {
     await setupWorkspace({

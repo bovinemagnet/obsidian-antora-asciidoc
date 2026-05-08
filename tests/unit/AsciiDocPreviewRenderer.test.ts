@@ -118,6 +118,13 @@ describe('AsciiDocPreviewRenderer', () => {
     expect(html).toMatch(/class="tabs is-sync"/);
   });
 
+  it('returns diagnostics from renderWithDiagnostics on a clean render', async () => {
+    const renderer = new AsciiDocPreviewRenderer(new AntoraComponentIndex(), new InMemoryFileSource());
+    const result = await renderer.renderWithDiagnostics('= Title\n\n== Section\n\nHello.', { sourcePath: 'p.adoc' });
+    expect(result.html).toContain('Hello');
+    expect(Array.isArray(result.diagnostics)).toBe(true);
+  });
+
   it('renders [tabs] blocks into a tabbed container', async () => {
     const renderer = new AsciiDocPreviewRenderer(new AntoraComponentIndex(), new InMemoryFileSource());
 

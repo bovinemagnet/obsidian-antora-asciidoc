@@ -11,10 +11,12 @@ import { AntoraWorkspaceScanner } from './antora/AntoraWorkspaceScanner';
 import { parsePlaybooks } from './antora/PlaybookParser';
 import { AsciiDocParser } from './asciidoc/AsciiDocParser';
 import { AsciiDocPreviewRenderer } from './asciidoc/AsciiDocPreviewRenderer';
+import { buildPageTemplate, buildPartialTemplate } from './asciidoc/Templates';
 import { asciiDocLanguageSupport } from './editor/AsciiDocLanguageSupport';
 import { createAttributeAutocomplete } from './editor/AttributeAutocomplete';
 import { createAttributeHoverProvider } from './editor/AttributeHoverProvider';
 import { createBlockAttributeAutocomplete } from './editor/BlockAttributeAutocomplete';
+import { createBlockAttributeValueAutocomplete } from './editor/BlockAttributeValueAutocomplete';
 import { createBlockMacroAutocomplete } from './editor/BlockMacroAutocomplete';
 import { createDiagnosticsExtension } from './editor/DiagnosticsExtension';
 import { MutableEditorContext } from './editor/EditorContext';
@@ -27,6 +29,7 @@ import { createXrefAutocomplete } from './editor/XrefAutocomplete';
 import { createXrefHoverProvider } from './editor/XrefHoverProvider';
 import { createXrefNavigation } from './editor/XrefNavigation';
 import { DiagnosticsService } from './diagnostics/DiagnosticsService';
+import { defaultFilenameFor, ExportFormat, serialiseDiagnostics } from './diagnostics/DiagnosticsExporter';
 import { Diagnostic } from './diagnostics/Diagnostic';
 import { CompositeFileSource } from './io/CompositeFileSource';
 import { FileSource } from './io/FileSource';
@@ -78,7 +81,17 @@ export default class AntoraAsciidocPlugin extends Plugin {
     this.registerExtensions(['adoc', 'asciidoc'], 'markdown');
     this.registerView(ANTORA_EXPLORER_VIEW_TYPE, (leaf) => new AntoraExplorerView(leaf, this.index));
     this.registerView(DIAGNOSTICS_VIEW_TYPE, (leaf) => new DiagnosticsView(leaf));
-    this.registerView(ASCIIDOC_PREVIEW_VIEW_TYPE, (leaf) => new AsciiDocPreviewView(leaf, this.previewRenderer, this.index));
+    this.registerView(ASCIIDOC_PREVIEW_VIEW_TYPE, (leaf) => {
+      const view = new AsciiDocPreviewView(leaf, this.previewRenderer, this.index);
+      view.onRenderDiagnostics = (filePath, diagnostics) => {
+        if (diagnostics.length === 0) {
+          return;
+        }
+        const diagnosticsView = this.getDiagnosticsView();
+        diagnosticsView?.replaceDiagnosticsForFile(filePath, diagnostics);
+      };
+      return view;
+    });
     if (Platform.isDesktop) {
       this.registerView(BUILD_CONSOLE_VIEW_TYPE, (leaf) => new BuildConsoleView(leaf));
     }
@@ -130,6 +143,7 @@ export default class AntoraAsciidocPlugin extends Plugin {
             createIncludeAutocomplete(this.index, this.editorContext),
             createBlockMacroAutocomplete(this.editorContext),
             createBlockAttributeAutocomplete(this.editorContext),
+            createBlockAttributeValueAutocomplete(this.editorContext),
           ]
         : [],
     }));
@@ -206,6 +220,30 @@ export default class AntoraAsciidocPlugin extends Plugin {
       id: 'find-references-to-current-page',
       name: 'Find references to current page',
       callback: async () => this.findReferencesToCurrentPage(),
+    });
+
+    this.addCommand({
+      id: 'export-diagnostics-json',
+      name: 'Export diagnostics report (JSON)',
+      callback: async () => this.exportDiagnostics('json'),
+    });
+
+    this.addCommand({
+      id: 'export-diagnostics-csv',
+      name: 'Export diagnostics report (CSV)',
+      callback: async () => this.exportDiagnostics('csv'),
+    });
+
+    this.addCommand({
+      id: 'insert-page-template',
+      name: 'Insert page template at cursor',
+      callback: () => this.insertTemplate(buildPageTemplate()),
+    });
+
+    this.addCommand({
+      id: 'insert-partial-template',
+      name: 'Insert partial template at cursor',
+      callback: () => this.insertTemplate(buildPartialTemplate()),
     });
 
     this.addCommand({
@@ -352,7 +390,7 @@ export default class AntoraAsciidocPlugin extends Plugin {
       const owning = file ? this.index.getPageByFilePath(file.path) : undefined;
       this.editorContext.set(
         isAsciiDoc,
-        owning ? { component: owning.component, module: owning.module } : {},
+        owning ? { component: owning.component, module: owning.module, version: owning.version } : {},
         file?.path,
       );
     };
@@ -422,6 +460,33 @@ export default class AntoraAsciidocPlugin extends Plugin {
     this.fileSource = new CompositeFileSource([this.vaultSource, externalSource]);
     // Subsequent scans will pick up the new file source via the scanner's
     // dependency on `this.fileSource`.
+  }
+
+  private insertTemplate(template: string): void {
+    const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+    const editor = view?.editor;
+    if (!editor) {
+      new Notice('No active editor.');
+      return;
+    }
+    editor.replaceSelection(template);
+  }
+
+  private async exportDiagnostics(format: ExportFormat): Promise<void> {
+    const view = this.getDiagnosticsView();
+    const diagnostics = view ? view.getAllDiagnostics() : [];
+    if (diagnostics.length === 0) {
+      new Notice('No diagnostics to export. Run a validation first.');
+      return;
+    }
+    const filename = defaultFilenameFor(format);
+    try {
+      await this.app.vault.create(filename, serialiseDiagnostics(diagnostics, format));
+      new Notice(`Exported ${diagnostics.length} diagnostics to ${filename}.`);
+    } catch (error) {
+      this.logger.error('Diagnostics export failed', error);
+      new Notice(`Export failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 
   private async findReferencesToCurrentPage(): Promise<void> {
@@ -516,7 +581,11 @@ export default class AntoraAsciidocPlugin extends Plugin {
     new RenameModal(this.app, {
       title: `Rename anchor ${anchor}`,
       initialValue: anchor,
-      onPreview: async (value) => {
+      toggle: {
+        label: 'Rename across all pages',
+        description: 'Also rewrite declarations on every other page that uses this name.',
+      },
+      onPreview: async (value, acrossAll) => {
         if (!value || value === anchor) {
           return 0;
         }
@@ -524,10 +593,11 @@ export default class AntoraAsciidocPlugin extends Plugin {
           ownerFilePath: file.path,
           oldAnchor: anchor,
           newAnchor: value,
+          acrossAllPages: acrossAll,
         });
         return plan.edits.length;
       },
-      onSubmit: async (value) => {
+      onSubmit: async (value, acrossAll) => {
         if (!value || value === anchor) {
           new Notice('Rename cancelled (name unchanged).');
           return;
@@ -537,6 +607,7 @@ export default class AntoraAsciidocPlugin extends Plugin {
             ownerFilePath: file.path,
             oldAnchor: anchor,
             newAnchor: value,
+            acrossAllPages: acrossAll,
           });
           await this.applyRefactorPlan(plan);
           new Notice(`Renamed anchor ${anchor} → ${value}. Updated ${plan.edits.length} reference(s).`);

@@ -3,6 +3,7 @@ import { Component, ItemView, MarkdownRenderer, MarkdownView, Notice, TFile, Wor
 import { AntoraComponentIndex } from '../antora/AntoraComponentIndex';
 import { AntoraPathResolver } from '../antora/AntoraPathResolver';
 import { AsciiDocPreviewRenderer } from '../asciidoc/AsciiDocPreviewRenderer';
+import { Diagnostic } from '../diagnostics/Diagnostic';
 import { isAsciiDocPath } from '../util/FileUtils';
 
 export const ASCIIDOC_PREVIEW_VIEW_TYPE = 'antora-asciidoc-preview';
@@ -12,6 +13,12 @@ const ANTORA_TARGET_PATTERN = /^[A-Za-z0-9_.-]+(?::[A-Za-z0-9_./-]+)*\.adoc(?:#[
 export class AsciiDocPreviewView extends ItemView {
   private currentFile: TFile | null = null;
   private readonly resolver = new AntoraPathResolver();
+
+  /**
+   * Optional callback invoked after each render with the diagnostics
+   * asciidoctor.js produced. Lets the plugin pipe them into DiagnosticsView.
+   */
+  onRenderDiagnostics?: (filePath: string, diagnostics: Diagnostic[]) => void;
 
   constructor(
     leaf: WorkspaceLeaf,
@@ -56,7 +63,8 @@ export class AsciiDocPreviewView extends ItemView {
   private async renderFile(file: TFile): Promise<void> {
     this.currentFile = file;
     const content = await this.app.vault.cachedRead(file);
-    const html = await this.renderer.render(content, { sourcePath: file.path });
+    const { html, diagnostics } = await this.renderer.renderWithDiagnostics(content, { sourcePath: file.path });
+    this.onRenderDiagnostics?.(file.path, diagnostics);
 
     const { contentEl } = this;
     contentEl.empty();
@@ -196,6 +204,11 @@ export class AsciiDocPreviewView extends ItemView {
       const resolved = this.resolveImageSrc(src);
       if (resolved) {
         img.setAttribute('src', resolved);
+      } else {
+        const placeholder = document.createElement('div');
+        placeholder.addClass('antora-image-missing');
+        placeholder.setText(`Image not found: ${src}`);
+        img.parentNode?.replaceChild(placeholder, img);
       }
     }
   }

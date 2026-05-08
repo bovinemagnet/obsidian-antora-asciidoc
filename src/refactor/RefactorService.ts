@@ -34,6 +34,12 @@ export interface AnchorRenameOptions {
   ownerFilePath: string;
   oldAnchor: string;
   newAnchor: string;
+  /**
+   * When true, also rewrite anchor declarations on every other page that
+   * happens to declare the same name, plus their inbound xrefs. Default
+   * false — keeps the rename owner-page-scoped.
+   */
+  acrossAllPages?: boolean;
 }
 
 /**
@@ -198,14 +204,22 @@ export class RefactorService {
     }
 
     const plan: RefactorPlan = { edits: [], fileChanges: new Map() };
+    const acrossAll = options.acrossAllPages === true;
 
-    // Rewrite the declaration inside the owning page.
-    const ownerFile = this.findSourceFile(options.ownerFilePath);
-    if (ownerFile) {
-      const content = await this.source.read(ownerFile);
+    // Rewrite anchor declarations on the owning page (and on every other page
+    // when acrossAllPages is set).
+    const declarationFiles = acrossAll
+      ? this.adocFiles().map((f) => f.path)
+      : [options.ownerFilePath];
+    for (const declarationPath of declarationFiles) {
+      const declarationFile = this.findSourceFile(declarationPath);
+      if (!declarationFile) {
+        continue;
+      }
+      const content = await this.source.read(declarationFile);
       const updated = rewriteAnchorDeclarations(content, options.oldAnchor, options.newAnchor);
       if (updated !== content) {
-        plan.fileChanges.set(options.ownerFilePath, updated);
+        plan.fileChanges.set(declarationPath, updated);
       }
     }
 
@@ -226,7 +240,10 @@ export class RefactorService {
           continue;
         }
         const targetPage = this.index.resolvePage(resolved);
-        if (!targetPage || targetPage.filePath !== owner.filePath) {
+        if (!targetPage) {
+          continue;
+        }
+        if (!acrossAll && targetPage.filePath !== owner.filePath) {
           continue;
         }
         const newTarget = replaceAnchorInTarget(xref.target, options.oldAnchor, options.newAnchor);
@@ -266,9 +283,9 @@ export class RefactorService {
    * examples) fall back to a path-based lookup against the index's
    * descriptor registry.
    */
-  private deriveDefaultsForFile(filePath: string, sourcePage: AntoraPageEntry | undefined): { component?: string; module?: string } {
+  private deriveDefaultsForFile(filePath: string, sourcePage: AntoraPageEntry | undefined): { component?: string; module?: string; version?: string } {
     if (sourcePage) {
-      return { component: sourcePage.component, module: sourcePage.module };
+      return { component: sourcePage.component, module: sourcePage.module, version: sourcePage.version };
     }
     const context = this.index.getComponentContextForPath(filePath);
     if (context) {

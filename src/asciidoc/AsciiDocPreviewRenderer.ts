@@ -3,6 +3,7 @@ import asciidoctor from 'asciidoctor';
 import { AntoraComponentIndex } from '../antora/AntoraComponentIndex';
 import { AntoraResourceResolver } from '../antora/AntoraResourceResolver';
 import { extractPageAttributes } from '../antora/AntoraWorkspaceScanner';
+import { Diagnostic } from '../diagnostics/Diagnostic';
 import { FileSource } from '../io/FileSource';
 
 const INCLUDE_PATTERN = /^include::([^[]+)\[[^\]]*]/gm;
@@ -12,6 +13,11 @@ type AsciidoctorProcessor = ReturnType<typeof asciidoctor>;
 export interface RenderOptions {
   /** Path of the file being rendered, used to resolve relative includes. */
   sourcePath: string;
+}
+
+export interface RenderResult {
+  html: string;
+  diagnostics: Diagnostic[];
 }
 
 /**
@@ -33,25 +39,50 @@ export class AsciiDocPreviewRenderer {
     this.resourceResolver = new AntoraResourceResolver(index);
   }
 
+  /**
+   * Renders content to HTML. Existing callers using `render()` get just the
+   * HTML string for backwards compatibility; new callers can use
+   * `renderWithDiagnostics()` to also collect any errors that asciidoctor
+   * raises (or that the catch block produces) as Diagnostic records.
+   */
   async render(content: string, options: RenderOptions): Promise<string> {
+    const result = await this.renderWithDiagnostics(content, options);
+    return result.html;
+  }
+
+  async renderWithDiagnostics(content: string, options: RenderOptions): Promise<RenderResult> {
     const preprocessed = preprocessDiagramBlocks(preprocessTabsBlocks(content));
     const includeCache = await this.preloadIncludes(preprocessed, options.sourcePath);
+    const collected: Diagnostic[] = [];
 
     try {
       const processor = this.getProcessor();
       const registry = processor.Extensions.create();
       registerIncludeProcessor(registry as unknown as IncludeProcessorRegistry, includeCache);
 
+      const memoryLogger = installMemoryLogger(processor, options.sourcePath, collected);
       const result = processor.convert(preprocessed, {
         safe: 'safe',
         attributes: this.buildAttributes(preprocessed, options.sourcePath),
         standalone: false,
         extension_registry: registry,
       });
-      return typeof result === 'string' ? result : '';
+      memoryLogger?.restore();
+      const html = typeof result === 'string' ? result : '';
+      return { html, diagnostics: collected };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      return `<pre class="antora-preview-error">Render error: ${escapeHtml(message)}</pre>`;
+      collected.push({
+        filePath: options.sourcePath,
+        line: 1,
+        column: 1,
+        severity: 'error',
+        message: `Render error: ${message}`,
+      });
+      return {
+        html: `<pre class="antora-preview-error">Render error: ${escapeHtml(message)}</pre>`,
+        diagnostics: collected,
+      };
     }
   }
 
@@ -275,6 +306,73 @@ function buildTabsHtml(body: string[], sync: boolean): string | null {
 
   const tabsClass = sync ? 'tabs is-sync' : 'tabs';
   return `<div class="${tabsClass}"><div class="tablist"><ul>${tablistItems}</ul></div>${panels}</div>`;
+}
+
+/**
+ * Installs a temporary in-memory logger on the asciidoctor processor that
+ * captures every emitted message. After the convert call, each message is
+ * mapped to a Diagnostic. Restores the previous logger on `restore()`.
+ *
+ * Returns null if the processor doesn't expose the LoggerManager API (this
+ * keeps the call site safe across asciidoctor.js minor versions).
+ */
+function installMemoryLogger(
+  processor: AsciidoctorProcessor,
+  sourcePath: string,
+  collected: Diagnostic[],
+): { restore(): void } | null {
+  // The asciidoctor.js typings don't model LoggerManager fully.
+  const lm = (processor as unknown as { LoggerManager?: unknown }).LoggerManager;
+  if (!lm || typeof (lm as Record<string, unknown>).getLogger !== 'function') {
+    return null;
+  }
+  const manager = lm as {
+    getLogger(): unknown;
+    setLogger(logger: unknown): void;
+    newLogger?(name: string, init?: () => unknown): unknown;
+  };
+  const memoryLogger = (processor as unknown as { MemoryLogger?: { create?(): unknown } }).MemoryLogger;
+  if (!memoryLogger?.create) {
+    return null;
+  }
+  const previous = manager.getLogger();
+  const fresh = memoryLogger.create() as { getMessages(): Array<{ severity?: string; getText?(): string; text?: string; source_location?: { lineno?: number } }> };
+  manager.setLogger(fresh);
+
+  return {
+    restore() {
+      try {
+        for (const message of fresh.getMessages()) {
+          const text = typeof message.getText === 'function' ? message.getText() : message.text ?? '';
+          const severity = mapAsciidoctorSeverity(message.severity);
+          collected.push({
+            filePath: sourcePath,
+            line: message.source_location?.lineno ?? 1,
+            column: 1,
+            severity,
+            message: text,
+          });
+        }
+      } catch {
+        /* swallow — diagnostics are best-effort */
+      }
+      try {
+        manager.setLogger(previous);
+      } catch {
+        /* nothing else to do */
+      }
+    },
+  };
+}
+
+function mapAsciidoctorSeverity(severity: string | undefined): Diagnostic['severity'] {
+  switch (severity?.toUpperCase()) {
+    case 'ERROR':
+    case 'FATAL': return 'error';
+    case 'WARN':
+    case 'WARNING': return 'warning';
+    default: return 'info';
+  }
 }
 
 function escapeHtml(input: string): string {

@@ -9,18 +9,18 @@
  */
 export interface EditorContext {
   isAsciiDocActive(): boolean;
-  getDefaults(): { component?: string; module?: string };
+  getDefaults(): { component?: string; module?: string; version?: string };
   getActiveFilePath(): string | undefined;
 }
 
 export class MutableEditorContext implements EditorContext {
   private active = false;
-  private defaults: { component?: string; module?: string } = {};
+  private defaults: { component?: string; module?: string; version?: string } = {};
   private activeFilePath: string | undefined;
 
   set(
     active: boolean,
-    defaults: { component?: string; module?: string } = {},
+    defaults: { component?: string; module?: string; version?: string } = {},
     activeFilePath?: string,
   ): void {
     this.active = active;
@@ -32,7 +32,7 @@ export class MutableEditorContext implements EditorContext {
     return this.active;
   }
 
-  getDefaults(): { component?: string; module?: string } {
+  getDefaults(): { component?: string; module?: string; version?: string } {
     return this.defaults;
   }
 
