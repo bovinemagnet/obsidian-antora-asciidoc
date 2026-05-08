@@ -12,6 +12,7 @@ import { parsePlaybooks } from './antora/PlaybookParser';
 import { AsciiDocParser } from './asciidoc/AsciiDocParser';
 import { AsciiDocPreviewRenderer } from './asciidoc/AsciiDocPreviewRenderer';
 import { demoteHeading, generateAnchorId, promoteHeading } from './asciidoc/HeadingTransforms';
+import { convertAsciiDocToMarkdown } from './asciidoc/AsciiDocToMarkdown';
 import { convertMarkdownToAsciiDoc } from './asciidoc/MarkdownToAsciiDoc';
 import { buildPageTemplate, buildPartialTemplate } from './asciidoc/Templates';
 import { asciiDocLanguageSupport } from './editor/AsciiDocLanguageSupport';
@@ -52,6 +53,7 @@ import { AntoraPagePicker } from './views/AntoraPagePicker';
 import { ASCIIDOC_PREVIEW_VIEW_TYPE, AsciiDocPreviewView } from './views/AsciiDocPreviewView';
 import { BUILD_CONSOLE_VIEW_TYPE, BuildConsoleView } from './views/BuildConsoleView';
 import { DiagnosticsView, DIAGNOSTICS_VIEW_TYPE } from './views/DiagnosticsView';
+import { PAGE_OUTLINE_VIEW_TYPE, PageOutlineView } from './views/PageOutlineView';
 
 export default class AntoraAsciidocPlugin extends Plugin {
   settings: PluginSettings = DEFAULT_SETTINGS;
@@ -89,6 +91,7 @@ export default class AntoraAsciidocPlugin extends Plugin {
 
     this.registerExtensions(['adoc', 'asciidoc'], 'markdown');
     this.registerView(ANTORA_EXPLORER_VIEW_TYPE, (leaf) => new AntoraExplorerView(leaf, this.index));
+    this.registerView(PAGE_OUTLINE_VIEW_TYPE, (leaf) => new PageOutlineView(leaf));
     this.registerView(DIAGNOSTICS_VIEW_TYPE, (leaf) => new DiagnosticsView(leaf));
     this.registerView(ASCIIDOC_PREVIEW_VIEW_TYPE, (leaf) => {
       const view = new AsciiDocPreviewView(leaf, this.previewRenderer, this.index);
@@ -248,6 +251,18 @@ export default class AntoraAsciidocPlugin extends Plugin {
     });
 
     this.addCommand({
+      id: 'open-page-outline',
+      name: 'Open page outline',
+      callback: async () => {
+        const leaf = await this.activateView(PAGE_OUTLINE_VIEW_TYPE);
+        const view = leaf.view;
+        if (view instanceof PageOutlineView) {
+          await view.refreshFromActiveFile();
+        }
+      },
+    });
+
+    this.addCommand({
       id: 'open-antora-explorer',
       name: 'Open Antora explorer',
       callback: async () => {
@@ -283,6 +298,12 @@ export default class AntoraAsciidocPlugin extends Plugin {
       id: 'find-references-to-current-page',
       name: 'Find references to current page',
       callback: async () => this.findReferencesToCurrentPage(),
+    });
+
+    this.addCommand({
+      id: 'list-references-from-current-page',
+      name: 'List references from current page',
+      callback: async () => this.listReferencesFromCurrentPage(),
     });
 
     this.addCommand({
@@ -341,6 +362,19 @@ export default class AntoraAsciidocPlugin extends Plugin {
           return;
         }
         editor.replaceSelection(convertMarkdownToAsciiDoc(selection));
+      },
+    });
+
+    this.addCommand({
+      id: 'convert-asciidoc-selection-to-markdown',
+      name: 'Convert AsciiDoc selection to Markdown',
+      editorCallback: (editor) => {
+        const selection = editor.getSelection();
+        if (!selection) {
+          new Notice('Select some AsciiDoc first.');
+          return;
+        }
+        editor.replaceSelection(convertAsciiDocToMarkdown(selection));
       },
     });
 
@@ -666,6 +700,52 @@ export default class AntoraAsciidocPlugin extends Plugin {
       this.logger.error('Diagnostics export failed', error);
       new Notice(`Export failed: ${error instanceof Error ? error.message : String(error)}`);
     }
+  }
+
+  private async listReferencesFromCurrentPage(): Promise<void> {
+    const file = this.app.workspace.getActiveFile();
+    if (!(file instanceof TFile) || !isAsciiDocPath(file.path)) {
+      new Notice('Open an .adoc or .asciidoc file first.');
+      return;
+    }
+    const content = await this.app.vault.cachedRead(file);
+    const symbols = this.parser.parseSymbols(content);
+    const sourcePage = this.index.getPageByFilePath(file.path);
+    const defaults = sourcePage
+      ? { component: sourcePage.component, module: sourcePage.module, version: sourcePage.version }
+      : (this.index.getComponentContextForPath(file.path) ?? {});
+
+    const diagnostics: Diagnostic[] = [];
+    for (const xref of symbols.xrefs) {
+      const resolved = this.pathResolver.resolveXrefTarget(xref.target, defaults);
+      const targetPage = this.index.resolvePage(resolved);
+      const target = targetPage
+        ? `${targetPage.component}:${targetPage.module}:${targetPage.path}`
+        : '(unresolved)';
+      diagnostics.push({
+        filePath: file.path,
+        line: xref.line,
+        column: xref.column,
+        severity: targetPage ? 'info' : 'warning',
+        message: `xref:${xref.target}[…] → ${target}`,
+      });
+    }
+    for (const include of symbols.includes) {
+      diagnostics.push({
+        filePath: file.path,
+        line: include.line,
+        column: include.column,
+        severity: 'info',
+        message: `include::${include.target}`,
+      });
+    }
+
+    if (diagnostics.length === 0) {
+      new Notice('No references found in this page.');
+      return;
+    }
+    await this.openDiagnosticsView(diagnostics);
+    new Notice(`Listed ${diagnostics.length} reference(s) from ${file.basename}.`);
   }
 
   private async findReferencesToCurrentPage(): Promise<void> {

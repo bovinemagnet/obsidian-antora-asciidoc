@@ -86,6 +86,45 @@
   font-style: italic;
 }
 
+.antora-outline-pane {
+  padding: 0.4rem;
+  overflow: auto;
+  height: 100%;
+}
+
+.antora-outline-list {
+  list-style: none;
+  padding-left: 0;
+  margin: 0;
+}
+
+.antora-outline-entry {
+  padding: 0.15rem 0;
+}
+
+.antora-outline-indent-0 { padding-left: 0; font-weight: 600; }
+.antora-outline-indent-1 { padding-left: 0.8rem; }
+.antora-outline-indent-2 { padding-left: 1.6rem; }
+.antora-outline-indent-3 { padding-left: 2.4rem; }
+.antora-outline-indent-4 { padding-left: 3.2rem; }
+.antora-outline-indent-5 { padding-left: 4rem; }
+.antora-outline-indent-6 { padding-left: 4.8rem; color: var(--text-muted); font-style: italic; font-size: 0.85em; }
+
+.antora-outline-entry a {
+  color: var(--text-normal);
+  cursor: pointer;
+}
+
+.antora-outline-entry a:hover {
+  color: var(--text-accent);
+  text-decoration: underline;
+}
+
+.antora-outline-empty {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
 .antora-preview-pane {
   padding: 1rem;
   overflow: auto;
@@ -324,6 +363,44 @@
   color: var(--text-muted);
   opacity: 0.5;
   margin-right: 0.2em;
+}
+
+.antora-preview-pane .conum {
+  display: inline-block;
+  width: 1.4em;
+  height: 1.4em;
+  line-height: 1.4em;
+  text-align: center;
+  border-radius: 50%;
+  background: var(--text-accent);
+  color: var(--background-primary);
+  font-family: var(--font-monospace);
+  font-size: 0.85em;
+  font-weight: bold;
+  margin-right: 0.3em;
+  vertical-align: middle;
+}
+
+.antora-preview-pane .colist {
+  margin-top: 0.5rem;
+  padding: 0.4rem 0.8rem;
+  background: var(--background-secondary);
+  border-left: 3px solid var(--text-accent);
+  border-radius: 4px;
+}
+
+.antora-preview-pane .colist > table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.antora-preview-pane .colist td {
+  vertical-align: top;
+  padding: 0.2rem 0.4rem;
+}
+
+.antora-preview-pane .colist td:first-child {
+  width: 1.6em;
 }
 
 .antora-image-missing {
