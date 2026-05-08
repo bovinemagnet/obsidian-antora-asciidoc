@@ -88,7 +88,6 @@ npm run lint
 
 - Rich AsciiDoc language support beyond basic tokenization
 - Include and attribute autocomplete
-- Ctrl/Cmd-click xref navigation to target files
 - Stronger Antora xref resolution with context-aware component/version defaults
 - Incremental indexing and file-watch based updates
 - Better unresolved attribute resolution using AsciiDoc attribute scopes

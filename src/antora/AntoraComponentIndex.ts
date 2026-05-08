@@ -32,7 +32,7 @@ export interface AntoraComponentEntry {
 
 export class AntoraComponentIndex {
   private components = new Map<string, AntoraComponentEntry>();
-  private pagesByPath = new Map<string, AntoraPageEntry>();
+  private pagesByPath = new Map<string, AntoraPageEntry[]>();
 
   clear(): void {
     this.components.clear();
@@ -45,8 +45,9 @@ export class AntoraComponentIndex {
     const module = this.getOrCreateModule(version, entry.module);
 
     module.pages.push(entry);
-    this.pagesByPath.set(this.normalizedPageTarget(entry.module, entry.path), entry);
-    this.pagesByPath.set(this.normalizedPageTarget(undefined, entry.path), entry);
+    this.pushPage(this.normalizedPageTarget(entry.component, entry.module, entry.path), entry);
+    this.pushPage(this.normalizedPageTarget(undefined, entry.module, entry.path), entry);
+    this.pushPage(this.normalizedPageTarget(undefined, undefined, entry.path), entry);
   }
 
   addPartial(component: string, version: string, moduleName: string, path: string): void {
@@ -86,21 +87,24 @@ export class AntoraComponentIndex {
   }
 
   resolvePage(target: { component?: string; module?: string; page: string }): AntoraPageEntry | undefined {
-    if (target.component && target.module) {
-      const key = `${target.component}:${target.module}:${target.page}`;
-      for (const page of this.pagesByPath.values()) {
-        if (`${page.component}:${page.module}:${page.path}` === key) {
-          return page;
-        }
-      }
-      return undefined;
-    }
-
-    return this.pagesByPath.get(this.normalizedPageTarget(target.module, target.page));
+    const resolved = this.pagesByPath.get(this.normalizedPageTarget(target.component, target.module, target.page));
+    return resolved?.[0];
   }
 
-  private normalizedPageTarget(moduleName: string | undefined, path: string): string {
-    return moduleName ? `${moduleName}:${path}` : path;
+  private normalizedPageTarget(componentName: string | undefined, moduleName: string | undefined, path: string): string {
+    if (componentName && moduleName) {
+      return `${componentName}:${moduleName}:${path}`;
+    }
+    if (moduleName) {
+      return `${moduleName}:${path}`;
+    }
+    return path;
+  }
+
+  private pushPage(key: string, entry: AntoraPageEntry): void {
+    const entries = this.pagesByPath.get(key) ?? [];
+    entries.push(entry);
+    this.pagesByPath.set(key, entries);
   }
 
   private getOrCreateComponent(name: string): AntoraComponentEntry {

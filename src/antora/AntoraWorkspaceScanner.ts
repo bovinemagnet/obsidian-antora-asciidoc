@@ -57,8 +57,6 @@ export class AntoraWorkspaceScanner {
       if (file.path.includes('/assets/images/')) {
         index.addImage(descriptor.component, descriptor.version, module, file.path.split('/assets/images/')[1]);
       }
-
-      this.parser.parseSymbols(content);
     }
 
     return {

@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "description": "Obsidian plugin for Antora-focused AsciiDoc authoring",
   "main": "main.js",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "node esbuild.config.mjs",
     "build": "node esbuild.config.mjs --production",
@@ -17,10 +20,10 @@
   "author": "bovinemagnet",
   "license": "Apache-2.0",
   "devDependencies": {
-    "@codemirror/autocomplete": "^6.18.6",
-    "@codemirror/language": "^6.11.3",
+    "@codemirror/autocomplete": "6.18.6",
+    "@codemirror/language": "6.11.3",
     "@codemirror/state": "6.5.0",
-    "@codemirror/view": "^6.38.6",
+    "@codemirror/view": "6.38.6",
     "@typescript-eslint/eslint-plugin": "^7.18.0",
     "@typescript-eslint/parser": "^7.18.0",
     "@types/node": "^20.17.57",

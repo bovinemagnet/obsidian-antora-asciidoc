@@ -3,6 +3,7 @@ import { Notice, Plugin, TFile, WorkspaceLeaf } from 'obsidian';
 
 import { AntoraBuildRunner } from './build/AntoraBuildRunner';
 import { AntoraComponentIndex } from './antora/AntoraComponentIndex';
+import { AntoraPathResolver } from './antora/AntoraPathResolver';
 import { AntoraWorkspaceScanner } from './antora/AntoraWorkspaceScanner';
 import { AsciiDocParser } from './asciidoc/AsciiDocParser';
 import { asciiDocLanguageSupport } from './editor/AsciiDocLanguageSupport';
@@ -27,6 +28,7 @@ export default class AntoraAsciidocPlugin extends Plugin {
   private readonly scanner = new AntoraWorkspaceScanner(this.app.vault, this.parser);
   private readonly diagnosticsService = new DiagnosticsService(this.app.vault, this.parser, this.index);
   private readonly buildRunner = new AntoraBuildRunner();
+  private readonly pathResolver = new AntoraPathResolver();
 
   async onload(): Promise<void> {
     await this.loadSettings();
@@ -41,8 +43,8 @@ export default class AntoraAsciidocPlugin extends Plugin {
         override: this.settings.autocompleteEnabled ? [createXrefAutocomplete(this.index)] : [],
       }),
       createXrefHoverProvider(this.index),
-      createXrefNavigation(),
-      createDiagnosticsExtension(),
+      createXrefNavigation(async (target) => this.openXrefTarget(target)),
+      ...(this.settings.diagnosticsEnabled ? [createDiagnosticsExtension()] : []),
     ]);
 
     this.addSettingTab(new SettingsTab(this.app, this));
@@ -139,6 +141,25 @@ export default class AntoraAsciidocPlugin extends Plugin {
     if (view instanceof DiagnosticsView) {
       view.setDiagnostics(diagnostics);
     }
+  }
+
+  private async openXrefTarget(rawTarget: string): Promise<void> {
+    const resolved = this.pathResolver.resolveXrefTarget(rawTarget);
+    const page = this.index.resolvePage(resolved);
+
+    if (!page) {
+      new Notice(`Unresolved xref target: ${rawTarget}`);
+      return;
+    }
+
+    const file = this.app.vault.getAbstractFileByPath(page.filePath);
+    if (!(file instanceof TFile)) {
+      new Notice(`Target page not found in vault: ${page.filePath}`);
+      return;
+    }
+
+    const leaf = this.app.workspace.getMostRecentLeaf() ?? this.app.workspace.getLeaf(true);
+    await leaf.openFile(file);
   }
 
   private getExplorerView(): AntoraExplorerView | null {

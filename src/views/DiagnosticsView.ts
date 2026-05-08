@@ -1,4 +1,4 @@
-import { ItemView, TFile } from 'obsidian';
+import { ItemView, MarkdownView, TFile } from 'obsidian';
 
 import { Diagnostic } from '../diagnostics/Diagnostic';
 
@@ -46,7 +46,7 @@ export class DiagnosticsView extends ItemView {
         if (file instanceof TFile) {
           const leaf = this.app.workspace.getMostRecentLeaf() ?? this.app.workspace.getLeaf(true);
           await leaf.openFile(file);
-          const view = this.app.workspace.getActiveViewOfType((await import('obsidian')).MarkdownView);
+          const view = this.app.workspace.getActiveViewOfType(MarkdownView);
           view?.editor?.setCursor({ line: diagnostic.line - 1, ch: diagnostic.column - 1 });
         }
       };

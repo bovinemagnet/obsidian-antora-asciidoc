@@ -41,11 +41,10 @@ export class AntoraExplorerView extends ItemView {
           const moduleEl = root.createEl('div', { text: `Module: ${module.name}` });
           moduleEl.addClass('antora-explorer-module');
 
-          root.createEl('div', { text: `Pages (${module.pages.length})` });
-          root.createEl('div', { text: `Partials (${module.partials.length})` });
-          root.createEl('div', { text: `Examples (${module.examples.length})` });
-          root.createEl('div', { text: `Assets (${module.images.length})` });
-          moduleEl.createDiv();
+          moduleEl.createEl('div', { text: `Pages (${module.pages.length})` });
+          moduleEl.createEl('div', { text: `Partials (${module.partials.length})` });
+          moduleEl.createEl('div', { text: `Examples (${module.examples.length})` });
+          moduleEl.createEl('div', { text: `Assets (${module.images.length})` });
         }
       }
     }
