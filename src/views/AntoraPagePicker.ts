@@ -8,15 +8,24 @@ interface PickerEntry {
   label: string;
 }
 
+export type PickerAction = 'open' | { kind: 'callback'; onPick: (page: AntoraPageEntry) => void };
+
 /**
  * Fuzzy-search modal over every indexed Antora page. Faster than the file
  * switcher for navigating an Antora site because it shows page IDs
  * (`component:version:module:path`) rather than vault filenames, and limits
  * the candidate set to actual pages (not partials, examples, or other
  * adjacent files).
+ *
+ * Default action is 'open' (open the file in the most recent leaf). Pass a
+ * callback action to reuse the picker for "insert xref…" or similar commands.
  */
 export class AntoraPagePicker extends FuzzySuggestModal<PickerEntry> {
-  constructor(app: App, private readonly index: AntoraComponentIndex) {
+  constructor(
+    app: App,
+    private readonly index: AntoraComponentIndex,
+    private readonly action: PickerAction = 'open',
+  ) {
     super(app);
     this.setPlaceholder('Search Antora pages by component, module, or path…');
   }
@@ -45,6 +54,10 @@ export class AntoraPagePicker extends FuzzySuggestModal<PickerEntry> {
   }
 
   async onChooseItem(entry: PickerEntry): Promise<void> {
+    if (this.action !== 'open') {
+      this.action.onPick(entry.page);
+      return;
+    }
     const file = this.app.vault.getAbstractFileByPath(entry.page.filePath);
     if (!(file instanceof TFile)) {
       new Notice(`File not found in vault: ${entry.page.filePath}`);
@@ -53,4 +66,22 @@ export class AntoraPagePicker extends FuzzySuggestModal<PickerEntry> {
     const leaf = this.app.workspace.getMostRecentLeaf() ?? this.app.workspace.getLeaf(true);
     await leaf.openFile(file);
   }
+}
+
+/**
+ * Builds the most-context-appropriate xref target for the picked page given
+ * the current source page's component/module. Bare when same module, scoped
+ * when same component, fully-qualified when cross-component.
+ */
+export function buildXrefTargetFor(
+  picked: AntoraPageEntry,
+  source: { component?: string; module?: string } = {},
+): string {
+  if (source.component === picked.component && source.module === picked.module) {
+    return picked.path;
+  }
+  if (source.component === picked.component) {
+    return `${picked.module}:${picked.path}`;
+  }
+  return `${picked.component}:${picked.module}:${picked.path}`;
 }

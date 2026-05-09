@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { AntoraComponentIndex } from '../../src/antora/AntoraComponentIndex';
-import { AntoraPagePicker } from '../../src/views/AntoraPagePicker';
+import { AntoraPagePicker, buildXrefTargetFor } from '../../src/views/AntoraPagePicker';
 
 function makeIndex(): AntoraComponentIndex {
   const index = new AntoraComponentIndex();
@@ -58,5 +58,28 @@ describe('AntoraPagePicker', () => {
   it('returns an empty list when nothing is indexed', () => {
     const picker = new AntoraPagePicker({} as never, new AntoraComponentIndex());
     expect(picker.getItems()).toEqual([]);
+  });
+});
+
+describe('buildXrefTargetFor', () => {
+  const target = {
+    component: 'docs', version: '1.0', module: 'api', path: 'overview.adoc',
+    filePath: 'docs/modules/api/pages/overview.adoc', anchors: new Set<string>(),
+  };
+
+  it('emits the bare path when source is in the same module', () => {
+    expect(buildXrefTargetFor(target, { component: 'docs', module: 'api' })).toBe('overview.adoc');
+  });
+
+  it('emits module:page when source is in the same component but different module', () => {
+    expect(buildXrefTargetFor(target, { component: 'docs', module: 'ROOT' })).toBe('api:overview.adoc');
+  });
+
+  it('emits component:module:page when source is in a different component', () => {
+    expect(buildXrefTargetFor(target, { component: 'other', module: 'ROOT' })).toBe('docs:api:overview.adoc');
+  });
+
+  it('emits component:module:page when no source context is provided', () => {
+    expect(buildXrefTargetFor(target)).toBe('docs:api:overview.adoc');
   });
 });

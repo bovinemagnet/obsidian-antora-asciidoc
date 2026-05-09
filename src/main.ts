@@ -8,6 +8,7 @@ import { AntoraComponentIndex } from './antora/AntoraComponentIndex';
 import { AntoraPathResolver } from './antora/AntoraPathResolver';
 import { AntoraProject } from './antora/AntoraProject';
 import { AntoraWorkspaceScanner } from './antora/AntoraWorkspaceScanner';
+import { buildNavigationExport } from './antora/NavigationExport';
 import { parsePlaybooks } from './antora/PlaybookParser';
 import { AsciiDocParser } from './asciidoc/AsciiDocParser';
 import { AsciiDocPreviewRenderer } from './asciidoc/AsciiDocPreviewRenderer';
@@ -15,6 +16,7 @@ import { demoteHeading, generateAnchorId, promoteHeading } from './asciidoc/Head
 import { convertAsciiDocToMarkdown } from './asciidoc/AsciiDocToMarkdown';
 import { convertMarkdownToAsciiDoc } from './asciidoc/MarkdownToAsciiDoc';
 import { buildPageTemplate, buildPartialTemplate } from './asciidoc/Templates';
+import { detectWikilinkAt } from './asciidoc/WikilinkConverter';
 import { asciiDocLanguageSupport } from './editor/AsciiDocLanguageSupport';
 import { createAttributeAutocomplete } from './editor/AttributeAutocomplete';
 import { createAttributeHoverProvider } from './editor/AttributeHoverProvider';
@@ -57,7 +59,8 @@ import { RecentList } from './util/RecentList';
 import { isAsciiDocPath } from './util/FileUtils';
 import { Logger } from './util/Logger';
 import { ANTORA_EXPLORER_VIEW_TYPE, AntoraExplorerView } from './views/AntoraExplorerView';
-import { AntoraPagePicker } from './views/AntoraPagePicker';
+import { AntoraImagePicker, buildImageTargetFor } from './views/AntoraImagePicker';
+import { AntoraPagePicker, buildXrefTargetFor } from './views/AntoraPagePicker';
 import { AdmonitionPicker, buildAdmonitionBlock } from './views/AdmonitionPicker';
 import { RecentPagePicker } from './views/RecentPagePicker';
 import { ASCIIDOC_PREVIEW_VIEW_TYPE, AsciiDocPreviewView } from './views/AsciiDocPreviewView';
@@ -270,6 +273,34 @@ export default class AntoraAsciidocPlugin extends Plugin {
     });
 
     this.addCommand({
+      id: 'insert-image-via-picker',
+      name: 'Insert image via picker…',
+      editorCallback: (editor) => {
+        const sourcePage = this.editorContext.getDefaults();
+        new AntoraImagePicker(this.app, this.index, (entry) => {
+          const target = buildImageTargetFor(entry, sourcePage);
+          editor.replaceSelection(`image::${target}[]`);
+        }).open();
+      },
+    });
+
+    this.addCommand({
+      id: 'insert-xref-via-picker',
+      name: 'Insert xref via page picker…',
+      editorCallback: (editor) => {
+        const sourcePage = this.editorContext.getDefaults();
+        new AntoraPagePicker(this.app, this.index, {
+          kind: 'callback',
+          onPick: (page) => {
+            const target = buildXrefTargetFor(page, sourcePage);
+            const insertion = `xref:${target}[${page.title ?? ''}]`;
+            editor.replaceSelection(insertion);
+          },
+        }).open();
+      },
+    });
+
+    this.addCommand({
       id: 'open-page-outline',
       name: 'Open page outline',
       callback: async () => {
@@ -347,6 +378,12 @@ export default class AntoraAsciidocPlugin extends Plugin {
       id: 'workspace-audit-report',
       name: 'Workspace audit report',
       callback: async () => this.exportWorkspaceAudit(),
+    });
+
+    this.addCommand({
+      id: 'export-navigation-json',
+      name: 'Export navigation tree (JSON)',
+      callback: async () => this.exportNavigationJson(),
     });
 
     this.addCommand({
@@ -431,6 +468,25 @@ export default class AntoraAsciidocPlugin extends Plugin {
           return;
         }
         editor.replaceSelection(convertMarkdownToAsciiDoc(selection));
+      },
+    });
+
+    this.addCommand({
+      id: 'convert-wikilink-to-xref',
+      name: 'Convert wikilink under cursor to xref',
+      editorCallback: (editor) => {
+        const cursor = editor.getCursor();
+        const lineText = editor.getLine(cursor.line);
+        const match = detectWikilinkAt(lineText, cursor.ch);
+        if (!match) {
+          new Notice('Place the cursor on a [[wikilink]] first.');
+          return;
+        }
+        editor.replaceRange(
+          match.replacement,
+          { line: cursor.line, ch: match.startCh },
+          { line: cursor.line, ch: match.endCh },
+        );
       },
     });
 
@@ -791,6 +847,23 @@ export default class AntoraAsciidocPlugin extends Plugin {
     } catch (error) {
       this.logger.error('Diagnostics export failed', error);
       new Notice(`Export failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  private async exportNavigationJson(): Promise<void> {
+    const doc = buildNavigationExport(this.index);
+    if (doc.components.length === 0) {
+      new Notice('No nav.adoc trees found to export.');
+      return;
+    }
+    const stamp = doc.generatedAt.replace(/[:.]/g, '-');
+    const filename = `antora-navigation-${stamp}.json`;
+    try {
+      await this.app.vault.create(filename, JSON.stringify(doc, null, 2) + '\n');
+      new Notice(`Navigation tree written to ${filename}.`);
+    } catch (error) {
+      this.logger.error('Navigation export failed', error);
+      new Notice(`Navigation export failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
