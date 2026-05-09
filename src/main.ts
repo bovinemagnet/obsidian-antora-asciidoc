@@ -36,6 +36,8 @@ import { DiagnosticsService } from './diagnostics/DiagnosticsService';
 import { defaultFilenameFor, ExportFormat, serialiseDiagnostics } from './diagnostics/DiagnosticsExporter';
 import { Diagnostic } from './diagnostics/Diagnostic';
 import { findDuplicateAnchors } from './diagnostics/DuplicateAnchorLint';
+import { detectAttributeReferenceAt, findAttributeUsages } from './diagnostics/AttributeUsage';
+import { findIncludeUsages } from './diagnostics/IncludeUsage';
 import { findOrphanPages } from './diagnostics/OrphanPageLint';
 import { auditWorkspace, renderAuditMarkdown } from './diagnostics/WorkspaceAudit';
 import { deriveGraphEdges } from './graph/GraphEdgeDeriver';
@@ -51,10 +53,13 @@ import { RenameModal } from './refactor/RenameModal';
 import { SettingsTab } from './settings/SettingsTab';
 import { DEFAULT_SETTINGS, PluginSettings } from './settings/PluginSettings';
 import { debounce } from './util/Debounce';
+import { RecentList } from './util/RecentList';
 import { isAsciiDocPath } from './util/FileUtils';
 import { Logger } from './util/Logger';
 import { ANTORA_EXPLORER_VIEW_TYPE, AntoraExplorerView } from './views/AntoraExplorerView';
 import { AntoraPagePicker } from './views/AntoraPagePicker';
+import { AdmonitionPicker, buildAdmonitionBlock } from './views/AdmonitionPicker';
+import { RecentPagePicker } from './views/RecentPagePicker';
 import { ASCIIDOC_PREVIEW_VIEW_TYPE, AsciiDocPreviewView } from './views/AsciiDocPreviewView';
 import { BUILD_CONSOLE_VIEW_TYPE, BuildConsoleView } from './views/BuildConsoleView';
 import { DiagnosticsView, DIAGNOSTICS_VIEW_TYPE } from './views/DiagnosticsView';
@@ -80,6 +85,7 @@ export default class AntoraAsciidocPlugin extends Plugin {
   private graphSyncApplier!: GraphSyncApplier;
   private editorExtensions: Extension[] = [];
   private autoPreviewOpened = false;
+  private readonly recentPages = new RecentList(20);
 
   async onload(): Promise<void> {
     await this.loadSettings();
@@ -258,6 +264,12 @@ export default class AntoraAsciidocPlugin extends Plugin {
     });
 
     this.addCommand({
+      id: 'open-recent-asciidoc-page',
+      name: 'Open recent AsciiDoc page…',
+      callback: () => new RecentPagePicker(this.app, this.recentPages).open(),
+    });
+
+    this.addCommand({
       id: 'open-page-outline',
       name: 'Open page outline',
       callback: async () => {
@@ -335,6 +347,18 @@ export default class AntoraAsciidocPlugin extends Plugin {
       id: 'workspace-audit-report',
       name: 'Workspace audit report',
       callback: async () => this.exportWorkspaceAudit(),
+    });
+
+    this.addCommand({
+      id: 'find-pages-including-this',
+      name: 'Find pages that include this file',
+      callback: async () => this.findIncludeUsagesCommand(),
+    });
+
+    this.addCommand({
+      id: 'find-attribute-usages',
+      name: 'Find usages of attribute under cursor',
+      editorCallback: (editor) => void this.findAttributeUsagesCommand(editor),
     });
 
     this.addCommand({
@@ -420,6 +444,21 @@ export default class AntoraAsciidocPlugin extends Plugin {
           return;
         }
         editor.replaceSelection(convertAsciiDocToMarkdown(selection));
+      },
+    });
+
+    this.addCommand({
+      id: 'wrap-selection-as-admonition',
+      name: 'Wrap selection as admonition…',
+      editorCallback: (editor) => {
+        const selection = editor.getSelection();
+        if (!selection) {
+          new Notice('Select some text first.');
+          return;
+        }
+        new AdmonitionPicker(this.app, (type) => {
+          editor.replaceSelection(buildAdmonitionBlock(type, selection));
+        }).open();
       },
     });
 
@@ -527,9 +566,13 @@ export default class AntoraAsciidocPlugin extends Plugin {
       }
     }));
     this.registerEvent(this.app.vault.on('delete', (file) => {
+      if (file instanceof TFile) {
+        this.recentPages.forget(file.path);
+      }
       this.handleFileChange(file, fullReindex, refreshExplorer, 'remove');
     }));
     this.registerEvent(this.app.vault.on('rename', (file, oldPath) => {
+      this.recentPages.forget(oldPath);
       // Drop entries under the old path, then upsert at the new path.
       this.index.removePagesUnder(oldPath);
       this.handleFileChange(file, fullReindex, refreshExplorer, 'upsert');
@@ -597,6 +640,10 @@ export default class AntoraAsciidocPlugin extends Plugin {
         owning ? { component: owning.component, module: owning.module, version: owning.version } : {},
         file?.path,
       );
+
+      if (isAsciiDoc && file) {
+        this.recentPages.visit(file.path);
+      }
 
       if (isAsciiDoc && this.settings.autoOpenPreview && !this.autoPreviewOpened) {
         this.autoPreviewOpened = true;
@@ -767,6 +814,38 @@ export default class AntoraAsciidocPlugin extends Plugin {
       this.logger.error('Audit failed', error);
       new Notice(`Audit failed: ${error instanceof Error ? error.message : String(error)}`);
     }
+  }
+
+  private async findAttributeUsagesCommand(editor: import('obsidian').Editor): Promise<void> {
+    const cursor = editor.getCursor();
+    const lineText = editor.getLine(cursor.line);
+    const name = detectAttributeReferenceAt(lineText, cursor.ch);
+    if (!name) {
+      new Notice('Place the cursor on an `{attribute}` reference first.');
+      return;
+    }
+    const usages = await findAttributeUsages(this.fileSource, this.parser, name);
+    if (usages.length === 0) {
+      new Notice(`No references found for {${name}}.`);
+      return;
+    }
+    await this.openDiagnosticsView(usages);
+    new Notice(`Found ${usages.length} reference(s) to {${name}}.`);
+  }
+
+  private async findIncludeUsagesCommand(): Promise<void> {
+    const file = this.app.workspace.getActiveFile();
+    if (!(file instanceof TFile) || !isAsciiDocPath(file.path)) {
+      new Notice('Open the partial/example .adoc file you want to find usages of.');
+      return;
+    }
+    const usages = await findIncludeUsages(this.fileSource, this.index, this.parser, file.path);
+    if (usages.length === 0) {
+      new Notice(`No pages include ${file.basename}.`);
+      return;
+    }
+    await this.openDiagnosticsView(usages);
+    new Notice(`Found ${usages.length} include reference(s) to ${file.basename}.`);
   }
 
   private async findOrphanPagesCommand(): Promise<void> {

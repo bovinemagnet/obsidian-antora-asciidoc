@@ -1,6 +1,6 @@
 {
   "name": "obsidian-antora-asciidoc",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "description": "Obsidian plugin for Antora-focused AsciiDoc authoring",
   "main": "main.js",
   "engines": {
