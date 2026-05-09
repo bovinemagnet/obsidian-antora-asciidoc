@@ -131,6 +131,23 @@
   font-family: var(--font-text);
 }
 
+.antora-preview-banner {
+  margin: -0.5rem -0.5rem 0.8rem -0.5rem;
+  padding: 0.4rem 0.8rem;
+  background: var(--background-secondary);
+  border-bottom: 1px solid var(--background-modifier-border);
+  font-size: 0.85em;
+}
+
+.antora-preview-banner-id {
+  font-family: var(--font-monospace);
+  color: var(--text-accent);
+}
+
+.antora-preview-banner-title {
+  color: var(--text-muted);
+}
+
 .antora-preview-pane pre {
   background: var(--background-secondary);
   padding: 0.5rem;

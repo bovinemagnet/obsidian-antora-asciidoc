@@ -35,7 +35,9 @@ import { createXrefNavigation } from './editor/XrefNavigation';
 import { DiagnosticsService } from './diagnostics/DiagnosticsService';
 import { defaultFilenameFor, ExportFormat, serialiseDiagnostics } from './diagnostics/DiagnosticsExporter';
 import { Diagnostic } from './diagnostics/Diagnostic';
+import { findDuplicateAnchors } from './diagnostics/DuplicateAnchorLint';
 import { findOrphanPages } from './diagnostics/OrphanPageLint';
+import { auditWorkspace, renderAuditMarkdown } from './diagnostics/WorkspaceAudit';
 import { deriveGraphEdges } from './graph/GraphEdgeDeriver';
 import { GraphSyncApplier } from './graph/GraphSyncApplier';
 import { CompositeFileSource } from './io/CompositeFileSource';
@@ -88,6 +90,7 @@ export default class AntoraAsciidocPlugin extends Plugin {
       ignorePaths: this.settings.ignorePaths,
     });
     this.diagnosticsService = new DiagnosticsService(this.app.vault, this.parser, this.index, this.fileSource);
+    this.diagnosticsService.setLintRules(this.settings.lintRules);
     this.previewRenderer = new AsciiDocPreviewRenderer(this.index, this.fileSource);
     this.refactorService = new RefactorService(this.fileSource, this.index, this.parser);
     this.graphSyncApplier = new GraphSyncApplier(this.app);
@@ -139,6 +142,7 @@ export default class AntoraAsciidocPlugin extends Plugin {
     this.rebuildEditorExtensions();
     this.app.workspace.updateOptions();
     this.scanner?.setIgnorePaths(this.settings.ignorePaths);
+    this.diagnosticsService?.setLintRules(this.settings.lintRules);
     if (!this.settings.syncToObsidianGraph) {
       this.graphSyncApplier?.clear();
     } else {
@@ -325,6 +329,26 @@ export default class AntoraAsciidocPlugin extends Plugin {
       id: 'find-orphan-pages',
       name: 'Find orphan pages',
       callback: async () => this.findOrphanPagesCommand(),
+    });
+
+    this.addCommand({
+      id: 'workspace-audit-report',
+      name: 'Workspace audit report',
+      callback: async () => this.exportWorkspaceAudit(),
+    });
+
+    this.addCommand({
+      id: 'find-duplicate-anchors',
+      name: 'Find duplicate anchors',
+      callback: async () => {
+        const diagnostics = findDuplicateAnchors(this.index);
+        if (diagnostics.length === 0) {
+          new Notice('No duplicate anchors found within any component.');
+          return;
+        }
+        await this.openDiagnosticsView(diagnostics);
+        new Notice(`Found ${diagnostics.length / 2} anchor name(s) with multiple declarations.`);
+      },
     });
 
     this.addCommand({
@@ -720,6 +744,28 @@ export default class AntoraAsciidocPlugin extends Plugin {
     } catch (error) {
       this.logger.error('Diagnostics export failed', error);
       new Notice(`Export failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  private async exportWorkspaceAudit(): Promise<void> {
+    try {
+      const edges = await deriveGraphEdges(this.fileSource, this.index, this.parser);
+      const orphans = findOrphanPages(this.index, edges);
+      const duplicates = findDuplicateAnchors(this.index);
+      const report = await auditWorkspace({
+        source: this.fileSource,
+        index: this.index,
+        parser: this.parser,
+        orphanCount: orphans.length,
+        duplicateAnchorCount: duplicates.length / 2,
+      });
+      const stamp = report.generatedAt.replace(/[:.]/g, '-');
+      const filename = `workspace-audit-${stamp}.md`;
+      await this.app.vault.create(filename, renderAuditMarkdown(report));
+      new Notice(`Audit written to ${filename}.`);
+    } catch (error) {
+      this.logger.error('Audit failed', error);
+      new Notice(`Audit failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 

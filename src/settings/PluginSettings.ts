@@ -31,6 +31,13 @@ export interface PluginSettings {
   syncIncludeEdgesToGraph: boolean;
   /** When true, opening an .adoc file automatically opens the AsciiDoc preview pane. */
   autoOpenPreview: boolean;
+  /** Enabled in-house lint rules. Each toggle flips one validator on/off. */
+  lintRules: {
+    xref: boolean;
+    include: boolean;
+    attribute: boolean;
+    headingHierarchy: boolean;
+  };
 }
 
 export const DEFAULT_SETTINGS: PluginSettings = {
@@ -49,4 +56,10 @@ export const DEFAULT_SETTINGS: PluginSettings = {
   syncToObsidianGraph: false,
   syncIncludeEdgesToGraph: false,
   autoOpenPreview: false,
+  lintRules: {
+    xref: true,
+    include: true,
+    attribute: true,
+    headingHierarchy: true,
+  },
 };

@@ -70,6 +70,8 @@ export class AsciiDocPreviewView extends ItemView {
     contentEl.empty();
     contentEl.addClass('antora-preview-pane');
 
+    this.renderMetadataBanner(contentEl, file);
+
     // asciidoctor.js with safe='safe' sanitises script/style. Parse the
     // output and adopt nodes individually rather than assigning innerHTML.
     const parsed = new DOMParser().parseFromString(html, 'text/html');
@@ -81,6 +83,34 @@ export class AsciiDocPreviewView extends ItemView {
     this.rewriteImageSources(contentEl);
     this.activateTabBlocks(contentEl);
     await this.highlightCodeBlocks(contentEl, file.path);
+  }
+
+  /**
+   * Renders a small metadata banner at the top of the preview pane showing
+   * the active page's component@version:module:path triple plus title.
+   * Pages that aren't part of any indexed Antora component are labelled
+   * "(unindexed)" so the user knows the rendering context is the file's
+   * own attribute scope only.
+   */
+  private renderMetadataBanner(parent: HTMLElement, file: TFile): void {
+    const banner = parent.createDiv({ cls: 'antora-preview-banner' });
+    const page = this.index.getPageByFilePath(file.path);
+    if (page) {
+      const id = `${page.component}@${page.version}:${page.module}:${page.path}`;
+      banner.createSpan({ text: id, cls: 'antora-preview-banner-id' });
+      if (page.title) {
+        banner.createSpan({ text: ` — ${page.title}`, cls: 'antora-preview-banner-title' });
+      }
+    } else {
+      const context = this.index.getComponentContextForPath(file.path);
+      if (context) {
+        banner.createSpan({ text: `${context.component}:${context.module}`, cls: 'antora-preview-banner-id' });
+        banner.createSpan({ text: ' — partial / nav / non-page file', cls: 'antora-preview-banner-title' });
+      } else {
+        banner.createSpan({ text: file.path, cls: 'antora-preview-banner-id' });
+        banner.createSpan({ text: ' — unindexed', cls: 'antora-preview-banner-title' });
+      }
+    }
   }
 
   /**

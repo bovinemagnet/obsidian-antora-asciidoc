@@ -12,9 +12,19 @@ import { lintHeadingHierarchy } from './HeadingHierarchyLint';
 import { IncludeValidator } from './IncludeValidator';
 import { XrefValidator } from './XrefValidator';
 
+export interface LintRuleToggles {
+  xref?: boolean;
+  include?: boolean;
+  attribute?: boolean;
+  headingHierarchy?: boolean;
+}
+
 export class DiagnosticsService {
   private readonly xrefValidator: XrefValidator;
   private readonly includeValidator: IncludeValidator;
+  private rules: Required<LintRuleToggles> = {
+    xref: true, include: true, attribute: true, headingHierarchy: true,
+  };
 
   constructor(
     private readonly vault: Vault,
@@ -26,17 +36,29 @@ export class DiagnosticsService {
     this.includeValidator = new IncludeValidator(fileSource, new AntoraResourceResolver(index));
   }
 
+  /** Updates which lint rules are active. Missing keys keep their current value. */
+  setLintRules(rules: LintRuleToggles): void {
+    this.rules = { ...this.rules, ...rules } as Required<LintRuleToggles>;
+  }
+
   async validateFile(file: TFile): Promise<Diagnostic[]> {
     const content = await this.vault.cachedRead(file);
     const symbols = this.parser.parseSymbols(content);
     const knownNames = this.collectKnownAttributeNames();
     const disabledRanges = findDisabledRanges(content, knownNames);
 
-    return [
-      ...this.xrefValidator.validate(file.path, symbols),
-      ...this.includeValidator.validate(file.path, symbols),
-      ...lintHeadingHierarchy(content, file.path),
-      ...symbols.attributes
+    const out: Diagnostic[] = [];
+    if (this.rules.xref) {
+      out.push(...this.xrefValidator.validate(file.path, symbols));
+    }
+    if (this.rules.include) {
+      out.push(...this.includeValidator.validate(file.path, symbols));
+    }
+    if (this.rules.headingHierarchy) {
+      out.push(...lintHeadingHierarchy(content, file.path));
+    }
+    if (this.rules.attribute) {
+      out.push(...symbols.attributes
         .filter((attribute) => !this.isAttributeKnown(attribute.name))
         .filter((attribute) => !isLineWithinDisabledRange(attribute.line, disabledRanges))
         .map((attribute) => ({
@@ -45,8 +67,9 @@ export class DiagnosticsService {
           line: attribute.line,
           column: attribute.column,
           severity: 'warning',
-        }) satisfies Diagnostic),
-    ];
+        }) satisfies Diagnostic));
+    }
+    return out;
   }
 
   private collectKnownAttributeNames(): Set<string> {

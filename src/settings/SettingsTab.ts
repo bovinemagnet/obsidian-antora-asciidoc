@@ -30,6 +30,25 @@ export class SettingsTab extends PluginSettingTab {
         }),
       );
 
+    containerEl.createEl('h3', { text: 'Lint rules' });
+
+    type RuleKey = 'xref' | 'include' | 'attribute' | 'headingHierarchy';
+    const ruleSettings: Array<{ key: RuleKey; label: string; desc: string }> = [
+      { key: 'xref', label: 'Broken xref', desc: 'Flag xrefs that don\'t resolve to a known page or anchor.' },
+      { key: 'include', label: 'Unresolved include', desc: 'Flag include:: directives whose target file is missing.' },
+      { key: 'attribute', label: 'Unresolved attribute', desc: 'Flag {attr} references whose name isn\'t in the workspace or built-in set.' },
+      { key: 'headingHierarchy', label: 'Heading hierarchy', desc: 'Warn when a heading skips levels (e.g. = directly to ===).' },
+    ];
+    for (const rule of ruleSettings) {
+      new Setting(containerEl)
+        .setName(rule.label)
+        .setDesc(rule.desc)
+        .addToggle((t) => t.setValue(this.plugin.settings.lintRules[rule.key]).onChange(async (v) => {
+          this.plugin.settings.lintRules[rule.key] = v;
+          await this.plugin.saveSettings();
+        }));
+    }
+
     new Setting(containerEl)
       .setName('Auto-validate on save')
       .setDesc('Re-run xref/include/attribute checks shortly after a file changes.')
