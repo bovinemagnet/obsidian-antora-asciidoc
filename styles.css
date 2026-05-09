@@ -86,6 +86,88 @@
   font-style: italic;
 }
 
+.antora-explorer-pinned {
+  border-bottom: 1px solid var(--background-modifier-border);
+  padding: 0.4rem 0.6rem;
+}
+
+.antora-explorer-pinned-header {
+  font-size: 0.75em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 0.2rem;
+}
+
+.antora-explorer-pin-button {
+  margin-left: 0.4rem;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.85em;
+}
+
+.antora-explorer-pin-button:hover {
+  color: var(--text-error);
+}
+
+.antora-descriptor-pane {
+  padding: 0.6rem;
+  overflow: auto;
+  height: 100%;
+  font-size: 0.9em;
+}
+
+.antora-descriptor-section {
+  margin-bottom: 0.8rem;
+}
+
+.antora-descriptor-section h4 {
+  margin: 0 0 0.3rem;
+  text-transform: uppercase;
+  font-size: 0.75em;
+  color: var(--text-muted);
+}
+
+.antora-descriptor-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.1rem 0;
+}
+
+.antora-descriptor-key {
+  color: var(--text-muted);
+}
+
+.antora-descriptor-value {
+  font-family: var(--font-monospace);
+}
+
+.antora-descriptor-attrs {
+  list-style: none;
+  padding-left: 0;
+  margin: 0;
+}
+
+.antora-descriptor-attrs li {
+  padding: 0.1rem 0;
+  font-family: var(--font-monospace);
+  font-size: 0.85em;
+}
+
+.antora-descriptor-attr-name {
+  color: var(--text-accent);
+}
+
+.antora-descriptor-attr-value {
+  color: var(--text-normal);
+}
+
+.antora-descriptor-empty {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
 .antora-outline-pane {
   padding: 0.4rem;
   overflow: auto;

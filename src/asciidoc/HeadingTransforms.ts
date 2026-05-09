@@ -49,3 +49,18 @@ export function generateAnchorId(text: string): string {
   }
   return cleaned.replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 }
+
+/**
+ * Generates a kebab-case page filename ending in `.adoc`. Strips a passed-in
+ * extension first so callers can convert "Getting Started.adoc" → "getting-started.adoc"
+ * without doubling the suffix.
+ */
+export function generatePageSlug(text: string): string {
+  const trimmed = text.trim();
+  if (!trimmed) {
+    return '';
+  }
+  const withoutExt = trimmed.replace(/\.(adoc|asciidoc)$/i, '');
+  const slug = generateAnchorId(withoutExt);
+  return slug ? `${slug}.adoc` : '';
+}

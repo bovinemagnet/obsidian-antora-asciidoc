@@ -6,15 +6,27 @@ import { NavigationEntry } from '../antora/NavigationParser';
 
 export const ANTORA_EXPLORER_VIEW_TYPE = 'antora-explorer';
 
+export interface ExplorerPinSource {
+  /** Returns the current set of pinned vault paths. */
+  list(): string[];
+  /** Removes a pin (used when the user clicks the unpin glyph). */
+  unpin(path: string): Promise<void>;
+}
+
 export class AntoraExplorerView extends ItemView {
   private readonly resolver = new AntoraPathResolver();
   private filterText = '';
+  private pinSource: ExplorerPinSource | null = null;
 
   constructor(
     leaf: WorkspaceLeaf,
     private readonly index: AntoraComponentIndex,
   ) {
     super(leaf);
+  }
+
+  setPinSource(source: ExplorerPinSource): void {
+    this.pinSource = source;
   }
 
   getViewType(): string {
@@ -35,6 +47,7 @@ export class AntoraExplorerView extends ItemView {
     contentEl.addClass('antora-explorer-pane');
 
     this.renderFilter(contentEl);
+    this.renderPinned(contentEl);
 
     const root = contentEl.createDiv({ cls: 'antora-explorer-tree' });
     const filter = this.filterText.toLowerCase().trim();
@@ -95,6 +108,42 @@ export class AntoraExplorerView extends ItemView {
 
     if (!renderedSomething) {
       root.createEl('p', { text: filter ? 'No matches.' : 'No Antora components indexed.', cls: 'antora-explorer-empty' });
+    }
+  }
+
+  private renderPinned(parent: HTMLElement): void {
+    if (!this.pinSource) {
+      return;
+    }
+    const pinned = this.pinSource.list();
+    if (pinned.length === 0) {
+      return;
+    }
+    const section = parent.createDiv({ cls: 'antora-explorer-pinned' });
+    section.createEl('div', { text: 'Pinned', cls: 'antora-explorer-pinned-header' });
+    const list = section.createEl('ul', { cls: 'antora-explorer-nav' });
+    for (const path of pinned) {
+      const item = list.createEl('li');
+      const link = item.createEl('a', {
+        text: path.split('/').pop() ?? path,
+        cls: 'antora-explorer-nav-link',
+        attr: { title: path },
+      });
+      link.href = '#';
+      link.onclick = async (event) => {
+        event.preventDefault();
+        const file = this.app.vault.getAbstractFileByPath(path);
+        if (file instanceof TFile) {
+          const leaf = this.app.workspace.getMostRecentLeaf() ?? this.app.workspace.getLeaf(true);
+          await leaf.openFile(file);
+        }
+      };
+      const unpin = item.createEl('button', { text: '✕', cls: 'antora-explorer-pin-button' });
+      unpin.onclick = async (event) => {
+        event.preventDefault();
+        await this.pinSource?.unpin(path);
+        this.render();
+      };
     }
   }
 

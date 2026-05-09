@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { demoteHeading, generateAnchorId, promoteHeading } from '../../src/asciidoc/HeadingTransforms';
+import { demoteHeading, generateAnchorId, generatePageSlug, promoteHeading } from '../../src/asciidoc/HeadingTransforms';
 
 describe('promoteHeading', () => {
   it('removes one = from a heading line', () => {
@@ -57,5 +57,24 @@ describe('generateAnchorId', () => {
 
   it('handles digits inline', () => {
     expect(generateAnchorId('API v2.0')).toBe('api-v2-0');
+  });
+});
+
+describe('generatePageSlug', () => {
+  it('produces a kebab-case .adoc filename', () => {
+    expect(generatePageSlug('Getting Started')).toBe('getting-started.adoc');
+  });
+
+  it('strips an existing .adoc suffix before slugifying', () => {
+    expect(generatePageSlug('Getting Started.adoc')).toBe('getting-started.adoc');
+  });
+
+  it('handles .asciidoc suffix too', () => {
+    expect(generatePageSlug('My Page.asciidoc')).toBe('my-page.adoc');
+  });
+
+  it('returns empty for unusable input', () => {
+    expect(generatePageSlug('')).toBe('');
+    expect(generatePageSlug('!!!')).toBe('');
   });
 });

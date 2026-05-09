@@ -12,7 +12,7 @@ import { buildNavigationExport } from './antora/NavigationExport';
 import { parsePlaybooks } from './antora/PlaybookParser';
 import { AsciiDocParser } from './asciidoc/AsciiDocParser';
 import { AsciiDocPreviewRenderer } from './asciidoc/AsciiDocPreviewRenderer';
-import { demoteHeading, generateAnchorId, promoteHeading } from './asciidoc/HeadingTransforms';
+import { demoteHeading, generateAnchorId, generatePageSlug, promoteHeading } from './asciidoc/HeadingTransforms';
 import { convertAsciiDocToMarkdown } from './asciidoc/AsciiDocToMarkdown';
 import { convertMarkdownToAsciiDoc } from './asciidoc/MarkdownToAsciiDoc';
 import { buildPageTemplate, buildPartialTemplate } from './asciidoc/Templates';
@@ -49,6 +49,8 @@ import { FileSource } from './io/FileSource';
 import { NodeFileSource } from './io/NodeFileSource';
 import { VaultFileSource } from './io/VaultFileSource';
 import { buildComponentScaffold } from './asciidoc/ComponentScaffold';
+import { planBulkReplace } from './refactor/BulkReplace';
+import { BulkReplaceModal } from './refactor/BulkReplaceModal';
 import { ComponentScaffoldModal } from './refactor/ComponentScaffoldModal';
 import { RefactorService } from './refactor/RefactorService';
 import { RenameModal } from './refactor/RenameModal';
@@ -66,6 +68,7 @@ import { RecentPagePicker } from './views/RecentPagePicker';
 import { ASCIIDOC_PREVIEW_VIEW_TYPE, AsciiDocPreviewView } from './views/AsciiDocPreviewView';
 import { BUILD_CONSOLE_VIEW_TYPE, BuildConsoleView } from './views/BuildConsoleView';
 import { DiagnosticsView, DIAGNOSTICS_VIEW_TYPE } from './views/DiagnosticsView';
+import { MODULE_DESCRIPTOR_VIEW_TYPE, ModuleDescriptorView } from './views/ModuleDescriptorView';
 import { PAGE_OUTLINE_VIEW_TYPE, PageOutlineView } from './views/PageOutlineView';
 
 export default class AntoraAsciidocPlugin extends Plugin {
@@ -105,8 +108,19 @@ export default class AntoraAsciidocPlugin extends Plugin {
     this.graphSyncApplier = new GraphSyncApplier(this.app);
 
     this.registerExtensions(['adoc', 'asciidoc'], 'markdown');
-    this.registerView(ANTORA_EXPLORER_VIEW_TYPE, (leaf) => new AntoraExplorerView(leaf, this.index));
+    this.registerView(ANTORA_EXPLORER_VIEW_TYPE, (leaf) => {
+      const view = new AntoraExplorerView(leaf, this.index);
+      view.setPinSource({
+        list: () => [...this.settings.pinnedPages],
+        unpin: async (path) => {
+          this.settings.pinnedPages = this.settings.pinnedPages.filter((p) => p !== path);
+          await this.saveSettings();
+        },
+      });
+      return view;
+    });
     this.registerView(PAGE_OUTLINE_VIEW_TYPE, (leaf) => new PageOutlineView(leaf));
+    this.registerView(MODULE_DESCRIPTOR_VIEW_TYPE, (leaf) => new ModuleDescriptorView(leaf, this.index));
     this.registerView(DIAGNOSTICS_VIEW_TYPE, (leaf) => new DiagnosticsView(leaf));
     this.registerView(ASCIIDOC_PREVIEW_VIEW_TYPE, (leaf) => {
       const view = new AsciiDocPreviewView(leaf, this.previewRenderer, this.index);
@@ -301,6 +315,17 @@ export default class AntoraAsciidocPlugin extends Plugin {
     });
 
     this.addCommand({
+      id: 'open-module-descriptor',
+      name: 'Open module descriptor',
+      callback: async () => {
+        const leaf = await this.activateView(MODULE_DESCRIPTOR_VIEW_TYPE);
+        if (leaf.view instanceof ModuleDescriptorView) {
+          leaf.view.refresh();
+        }
+      },
+    });
+
+    this.addCommand({
       id: 'open-page-outline',
       name: 'Open page outline',
       callback: async () => {
@@ -310,6 +335,18 @@ export default class AntoraAsciidocPlugin extends Plugin {
           await view.refreshFromActiveFile();
         }
       },
+    });
+
+    this.addCommand({
+      id: 'pin-current-page',
+      name: 'Pin current page in Antora explorer',
+      callback: async () => this.pinCurrentPage(true),
+    });
+
+    this.addCommand({
+      id: 'unpin-current-page',
+      name: 'Unpin current page from Antora explorer',
+      callback: async () => this.pinCurrentPage(false),
     });
 
     this.addCommand({
@@ -330,6 +367,12 @@ export default class AntoraAsciidocPlugin extends Plugin {
           await view.refreshFromActiveFile();
         }
       },
+    });
+
+    this.addCommand({
+      id: 'bulk-find-and-replace',
+      name: 'Bulk find and replace across .adoc files…',
+      callback: () => this.openBulkReplacePrompt(),
     });
 
     this.addCommand({
@@ -515,6 +558,24 @@ export default class AntoraAsciidocPlugin extends Plugin {
         new AdmonitionPicker(this.app, (type) => {
           editor.replaceSelection(buildAdmonitionBlock(type, selection));
         }).open();
+      },
+    });
+
+    this.addCommand({
+      id: 'insert-page-slug-from-selection',
+      name: 'Insert page slug from selected title',
+      editorCallback: (editor) => {
+        const selection = editor.getSelection();
+        if (!selection) {
+          new Notice('Select the page title first.');
+          return;
+        }
+        const slug = generatePageSlug(selection);
+        if (!slug) {
+          new Notice('Could not derive a page slug from the selection.');
+          return;
+        }
+        editor.replaceSelection(slug);
       },
     });
 
@@ -848,6 +909,54 @@ export default class AntoraAsciidocPlugin extends Plugin {
       this.logger.error('Diagnostics export failed', error);
       new Notice(`Export failed: ${error instanceof Error ? error.message : String(error)}`);
     }
+  }
+
+  private openBulkReplacePrompt(): void {
+    new BulkReplaceModal(this.app, {
+      initialPattern: '',
+      initialReplacement: '',
+      onPreview: async (input) => {
+        const plan = await planBulkReplace(this.fileSource, input);
+        return plan.matches;
+      },
+      onSubmit: async (input) => {
+        try {
+          const plan = await planBulkReplace(this.fileSource, input);
+          if (plan.matches.length === 0) {
+            new Notice('No matches.');
+            return;
+          }
+          await this.applyRefactorPlan({ fileChanges: plan.fileChanges });
+          new Notice(`Replaced ${plan.matches.length} match(es) across ${plan.fileChanges.size} file(s).`);
+        } catch (error) {
+          this.logger.error('Bulk replace failed', error);
+          new Notice(`Bulk replace failed: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      },
+    }).open();
+  }
+
+  private async pinCurrentPage(pin: boolean): Promise<void> {
+    const file = this.app.workspace.getActiveFile();
+    if (!(file instanceof TFile) || !isAsciiDocPath(file.path)) {
+      new Notice('Open an .adoc or .asciidoc file first.');
+      return;
+    }
+    const isPinned = this.settings.pinnedPages.includes(file.path);
+    if (pin && isPinned) {
+      new Notice(`Already pinned: ${file.basename}`);
+      return;
+    }
+    if (!pin && !isPinned) {
+      new Notice(`Not pinned: ${file.basename}`);
+      return;
+    }
+    this.settings.pinnedPages = pin
+      ? [...this.settings.pinnedPages, file.path]
+      : this.settings.pinnedPages.filter((p) => p !== file.path);
+    await this.saveSettings();
+    this.getExplorerView()?.render();
+    new Notice(`${pin ? 'Pinned' : 'Unpinned'}: ${file.basename}`);
   }
 
   private async exportNavigationJson(): Promise<void> {
