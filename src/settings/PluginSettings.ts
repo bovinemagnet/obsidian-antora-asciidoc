@@ -37,6 +37,8 @@ export interface PluginSettings {
     include: boolean;
     attribute: boolean;
     headingHierarchy: boolean;
+    missingDescription: boolean;
+    image: boolean;
   };
   /** Vault paths the user has pinned for quick access in the Antora Explorer. */
   pinnedPages: string[];
@@ -63,6 +65,8 @@ export const DEFAULT_SETTINGS: PluginSettings = {
     include: true,
     attribute: true,
     headingHierarchy: true,
+    missingDescription: false,
+    image: true,
   },
   pinnedPages: [],
 };

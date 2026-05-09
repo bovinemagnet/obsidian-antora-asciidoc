@@ -464,6 +464,18 @@
   margin-right: 0.2em;
 }
 
+.antora-source-header {
+  color: var(--text-accent);
+  font-family: var(--font-monospace);
+  font-size: 0.9em;
+}
+
+.antora-source-fence {
+  color: var(--text-muted);
+  font-family: var(--font-monospace);
+  opacity: 0.7;
+}
+
 .antora-preview-pane .conum {
   display: inline-block;
   width: 1.4em;

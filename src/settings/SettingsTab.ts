@@ -32,12 +32,14 @@ export class SettingsTab extends PluginSettingTab {
 
     containerEl.createEl('h3', { text: 'Lint rules' });
 
-    type RuleKey = 'xref' | 'include' | 'attribute' | 'headingHierarchy';
+    type RuleKey = 'xref' | 'include' | 'attribute' | 'headingHierarchy' | 'missingDescription' | 'image';
     const ruleSettings: Array<{ key: RuleKey; label: string; desc: string }> = [
       { key: 'xref', label: 'Broken xref', desc: 'Flag xrefs that don\'t resolve to a known page or anchor.' },
       { key: 'include', label: 'Unresolved include', desc: 'Flag include:: directives whose target file is missing.' },
       { key: 'attribute', label: 'Unresolved attribute', desc: 'Flag {attr} references whose name isn\'t in the workspace or built-in set.' },
       { key: 'headingHierarchy', label: 'Heading hierarchy', desc: 'Warn when a heading skips levels (e.g. = directly to ===).' },
+      { key: 'image', label: 'Broken image target', desc: 'Flag image:: macros whose target file doesn\'t resolve.' },
+      { key: 'missingDescription', label: 'Missing :description:', desc: 'Suggest adding a :description: attribute on pages with a level-0 heading.' },
     ];
     for (const rule of ruleSettings) {
       new Setting(containerEl)

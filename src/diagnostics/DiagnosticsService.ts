@@ -9,7 +9,9 @@ import { findDisabledRanges, isLineWithinDisabledRange } from '../asciidoc/Condi
 import { FileSource } from '../io/FileSource';
 import { Diagnostic } from './Diagnostic';
 import { lintHeadingHierarchy } from './HeadingHierarchyLint';
+import { ImageValidator } from './ImageValidator';
 import { IncludeValidator } from './IncludeValidator';
+import { lintMissingDescription } from './MissingDescriptionLint';
 import { XrefValidator } from './XrefValidator';
 
 export interface LintRuleToggles {
@@ -17,13 +19,17 @@ export interface LintRuleToggles {
   include?: boolean;
   attribute?: boolean;
   headingHierarchy?: boolean;
+  missingDescription?: boolean;
+  image?: boolean;
 }
 
 export class DiagnosticsService {
   private readonly xrefValidator: XrefValidator;
   private readonly includeValidator: IncludeValidator;
+  private readonly imageValidator: ImageValidator;
   private rules: Required<LintRuleToggles> = {
     xref: true, include: true, attribute: true, headingHierarchy: true,
+    missingDescription: false, image: true,
   };
 
   constructor(
@@ -34,6 +40,7 @@ export class DiagnosticsService {
   ) {
     this.xrefValidator = new XrefValidator(index, new AntoraPathResolver());
     this.includeValidator = new IncludeValidator(fileSource, new AntoraResourceResolver(index));
+    this.imageValidator = new ImageValidator(fileSource, new AntoraResourceResolver(index));
   }
 
   /** Updates which lint rules are active. Missing keys keep their current value. */
@@ -68,6 +75,12 @@ export class DiagnosticsService {
           column: attribute.column,
           severity: 'warning',
         }) satisfies Diagnostic));
+    }
+    if (this.rules.missingDescription) {
+      out.push(...lintMissingDescription(content, file.path));
+    }
+    if (this.rules.image) {
+      out.push(...this.imageValidator.validate(file.path, symbols));
     }
     return out;
   }

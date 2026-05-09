@@ -16,8 +16,15 @@ export interface AsciiDocAttributeReference {
   column: number;
 }
 
+export interface AsciiDocImageSymbol {
+  target: string;
+  line: number;
+  column: number;
+}
+
 export interface AsciiDocSymbols {
   xrefs: AsciiDocXrefSymbol[];
   includes: AsciiDocIncludeSymbol[];
   attributes: AsciiDocAttributeReference[];
+  images: AsciiDocImageSymbol[];
 }

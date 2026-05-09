@@ -3,6 +3,7 @@ import { AsciiDocSymbols } from './AsciiDocSymbols';
 const XREF_RE = /xref:([^[]+)\[[^\]]*]/g;
 const INCLUDE_RE = /include::([^[]+)\[[^\]]*]/g;
 const ATTRIBUTE_RE = /\{([a-zA-Z0-9_-]+)}/g;
+const IMAGE_RE = /image::?([^[\s]+)\[[^\]]*]/g;
 
 function locateLineAndColumn(source: string, index: number): { line: number; column: number } {
   const prefix = source.slice(0, index);
@@ -39,6 +40,15 @@ export class AsciiDocParser {
       };
     });
 
-    return { xrefs, includes, attributes };
+    const images = Array.from(content.matchAll(IMAGE_RE)).map((match) => {
+      const position = locateLineAndColumn(content, match.index ?? 0);
+      return {
+        target: match[1].trim(),
+        line: position.line,
+        column: position.column,
+      };
+    });
+
+    return { xrefs, includes, attributes, images };
   }
 }
